@@ -478,7 +478,7 @@ static inline void skw_compat_cfg80211_roamed(struct net_device *dev,
 static inline void skw_ch_switch_started_notify(struct net_device *dev,
 		struct cfg80211_chan_def *chandef, u8 count,  bool quiet)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	cfg80211_ch_switch_started_notify(dev, chandef, 0, count, quiet);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 74)
 	cfg80211_ch_switch_started_notify(dev, chandef, 0, count, quiet, 0);
@@ -493,7 +493,7 @@ static inline void skw_ch_switch_started_notify(struct net_device *dev,
 static inline void skw_ch_switch_notify(struct net_device *dev,
 		struct cfg80211_chan_def *chandef)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	cfg80211_ch_switch_notify(dev, chandef, 0);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 74)
 	cfg80211_ch_switch_notify(dev, chandef, 0, 0);
