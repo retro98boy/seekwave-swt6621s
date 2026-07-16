@@ -26,6 +26,16 @@
 #include <linux/etherdevice.h>
 #include <linux/firmware.h>
 
+struct device;
+
+/* Firmware loading with optional subdirectory and board-specific fallback */
+extern int swt6621s_request_firmware(const struct firmware **fw,
+				     const char *name,
+				     struct device *dev);
+extern int swt6621s_request_firmware_direct(const struct firmware **fw,
+					    const char *name,
+					    struct device *dev);
+
 /* EID block */
 #define SKW_WLAN_EID_EXT_HE_CAPABILITY                            35
 #define SKW_WLAN_EID_EXT_HE_OPERATION                             36
@@ -669,11 +679,7 @@ static inline int skw_compat_cfg80211_chandef_dfs_required(struct wiphy *wiphy,
 static inline int skw_compat_request_firmware(const struct firmware **fw,
 			    const char *name, struct device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
-	return request_firmware_direct(fw, name, dev);
-#else
-	return request_firmware(fw, name, dev);
-#endif
+	return swt6621s_request_firmware_direct(fw, name, dev);
 }
 
 static inline void skw_compat_netif_napi_add_weight(struct net_device *dev,

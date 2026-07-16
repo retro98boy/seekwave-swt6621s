@@ -18,6 +18,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/of.h>
 #include <linux/ip.h>
 #include <linux/if_ether.h>
 #include <linux/skbuff.h>
@@ -36,6 +39,7 @@
 #include <linux/rfkill-wlan.h>
 #endif
 
+#include <skw_firmware_helper.h>
 #include "skw_core.h"
 #include "skw_cfg80211.h"
 #include "skw_tx.h"
@@ -61,6 +65,31 @@ static u8 skw_mac[ETH_ALEN];
 static struct skw_global_config g_skw_config;
 
 static atomic_t skw_chip_idx = ATOMIC_INIT(0);
+
+char *swt6621s_firmware_dir = "";
+module_param_named(firmware_dir, swt6621s_firmware_dir, charp, 0644);
+MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
+
+char swt6621s_board_id[64] = "";
+
+int swt6621s_request_firmware(const struct firmware **fw, const char *name,
+			      struct device *dev)
+{
+	return skw_firmware_request_with_fallback(fw, name, dev,
+						  swt6621s_firmware_dir,
+						  swt6621s_board_id,
+						  sizeof(swt6621s_board_id), 0);
+}
+
+int swt6621s_request_firmware_direct(const struct firmware **fw,
+				     const char *name,
+				     struct device *dev)
+{
+	return skw_firmware_request_with_fallback(fw, name, dev,
+						  swt6621s_firmware_dir,
+						  swt6621s_board_id,
+						  sizeof(swt6621s_board_id), 1);
+}
 
 static const int g_skw_up_to_ac[8] = {
 	SKW_WMM_AC_BE,
@@ -2280,7 +2309,7 @@ int skw_calib_download(struct wiphy *wiphy, const char *fname)
 	int ret = 0;
 	const struct firmware *fw;
 
-	ret = request_firmware(&fw, fname, &wiphy->dev);
+	ret = swt6621s_request_firmware(&fw, fname, &wiphy->dev);
 	if (ret) {
 		skw_err("load %s failed, ret: %d\n", fname, ret);
 		return ret;

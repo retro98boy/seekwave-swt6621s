@@ -42,6 +42,9 @@
 #include <linux/delay.h>
 #include <linux/version.h>
 #include <linux/moduleparam.h>
+#include <linux/of.h>
+#include <linux/string.h>
+#include <skw_firmware_helper.h>
 
 #include "skw_btsnoop.h"
 #include "skw_log.h"
@@ -99,6 +102,22 @@ struct btseekwave_data
 };
 
 struct btseekwave_data *skw_data = NULL;
+
+static char *skwbt_firmware_dir = "";
+module_param_named(firmware_dir, skwbt_firmware_dir, charp, 0644);
+MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
+
+static char skwbt_board_id[64] = "";
+
+static int skwbt_request_firmware(const struct firmware **fw,
+				  const char *name,
+				  struct device *dev)
+{
+	return skw_firmware_request_with_fallback(fw, name, dev,
+						  skwbt_firmware_dir,
+						  skwbt_board_id,
+						  sizeof(skwbt_board_id), 0);
+}
 
 
 void btseekwave_hci_hardware_error(struct hci_dev *hdev)
@@ -527,15 +546,15 @@ int btseekwave_download_nv(struct hci_dev *hdev)
 
     if(SKW_CHIPID_6316 == chip_version)
     {
-        err = request_firmware(&fw, NV_FILE_NAME_6316, &hdev->dev);
+        err = skwbt_request_firmware(&fw, NV_FILE_NAME_6316, &hdev->dev);
     }
     else if(SKW_CHIPID_6160_LITE == chip_version)
     {
-        err = request_firmware(&fw, NV_FILE_NAME_6160_LITE, &hdev->dev);
+        err = skwbt_request_firmware(&fw, NV_FILE_NAME_6160_LITE, &hdev->dev);
     }
     else
     {
-        err = request_firmware(&fw, NV_FILE_NAME, &hdev->dev);
+        err = skwbt_request_firmware(&fw, NV_FILE_NAME, &hdev->dev);
     }
     if (err < 0)
     {

@@ -44,6 +44,7 @@
 #include "skw_mem_map.h"
 #include "skw_boot.h"
 #include "boot_config.h"
+#include <skw_firmware_helper.h>
 /**************************sdio boot start******************************/
 extern int cp_exception_sts;
 unsigned int test_debug = 0;
@@ -55,6 +56,11 @@ static char *local_chip_id = "SV6160LITE";
 int g_chipen_pin = -1;
 static int chip_enable = 0;
 module_param(chip_enable, int, S_IRUGO);
+
+static char *firmware_dir = "";
+module_param(firmware_dir, charp, 0644);
+MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
+
 #ifdef CONFIG_SKW_HOST_PLATFORM_NT
 int skw_use_sdma = 1;//1:sdma
 #else
@@ -328,14 +334,24 @@ static unsigned int crc_16_l_calc(char *buf_ptr,unsigned int len)
 }
 
 
+static char board_id[64] = "";
+
+static int skw_request_firmware_with_fallback(const char *name,
+					      const struct firmware **fw)
+{
+	return skw_firmware_request_with_fallback(fw, name, NULL,
+						  firmware_dir, board_id,
+						  sizeof(board_id), 0);
+}
+
+
 static int skw_request_firmwares(struct seekwave_device *boot_data,
 	const char *dram_image_name, const char *iram_image_name, const char *nv_mem_name)
 {
 	int ret;
 	const struct firmware *fw = NULL;
 
-	skwboot_log("request_firmware %s\n", dram_image_name);
-	ret = request_firmware(&fw, dram_image_name, NULL);
+	ret = skw_request_firmware_with_fallback(dram_image_name, &fw);
 	if (ret < 0) {
 		skwboot_err("request_firmware %s fail\n", dram_image_name);
 		goto ret;
@@ -357,8 +373,7 @@ static int skw_request_firmwares(struct seekwave_device *boot_data,
 	boot_data->dram_crc_offset=0;
 	boot_data->dram_crc_val = crc_16_l_calc(boot_data->dram_img_data + boot_data->dram_crc_offset, boot_data->dram_dl_size);
 
-	skwboot_log("request_firmware %s\n", iram_image_name);
-	ret = request_firmware(&fw, iram_image_name, NULL);
+	ret = skw_request_firmware_with_fallback(iram_image_name, &fw);
 	if (ret < 0) {
 		skwboot_err("request_firmware %s fail\n", iram_image_name);
 		goto ret;
@@ -387,8 +402,7 @@ static int skw_request_firmwares(struct seekwave_device *boot_data,
 		skwboot_warn("nv_mem_name is NULL\n");
 		goto ret;
 	}
-	skwboot_log("request_firmware %s\n", nv_mem_name);
-	ret = request_firmware(&fw, nv_mem_name, NULL);
+	ret = skw_request_firmware_with_fallback(nv_mem_name, &fw);
 	if (ret < 0) {
 		skwboot_err("request_firmware %s fail\n", nv_mem_name);
 		ret = ENOENT;
