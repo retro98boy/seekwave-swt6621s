@@ -660,7 +660,11 @@ void skw_del_sta_event(struct skw_iface *iface, const u8 *addr, u16 reason)
 				 -5400, (void *)&mgmt,
 				 SKW_DEAUTH_FRAME_LEN, 0, GFP_ATOMIC);
 	} else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		cfg80211_del_sta(iface->ndev->ieee80211_ptr, addr, GFP_KERNEL);
+#else
 		cfg80211_del_sta(iface->ndev, addr, GFP_KERNEL);
+#endif
 	}
 }
 

@@ -21,13 +21,17 @@
 #include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-#include <linux/of_gpio.h>
+#include <linux/of.h>
 #include <linux/completion.h>
 #include <linux/moduleparam.h>
 #include <linux/workqueue.h>
 #include <linux/of.h>
 #include <linux/device.h>
 #include <linux/version.h>
+/* of_gpio.h was removed in kernel 6.14 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+#include <linux/of_gpio.h>
+#endif
 #include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/ctype.h>
@@ -457,6 +461,22 @@ static int skw_of_property_read(const struct device_node *np,
 	return ENXIO;
 #endif
 }
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0))
+/* of_get_named_gpio() was removed together with <linux/of_gpio.h> in v6.14 */
+static int skw_of_get_named_gpio(const struct device_node *np,
+				 const char *propname, int index)
+{
+	struct of_phandle_args args;
+	int ret;
+
+	ret = of_parse_phandle_with_args(np, propname, "#gpio-cells", index, &args);
+	if (ret < 0)
+		return ret;
+	return args.args[0];
+}
+#endif
+
 static int seekwave_boot_parse_dt(struct platform_device *pdev, struct seekwave_device *boot_data)
 {
 	int ret = 0;
@@ -488,12 +508,21 @@ static int seekwave_boot_parse_dt(struct platform_device *pdev, struct seekwave_
 		g_chipen_pin = boot_data->chip_en =
 			of_get_named_gpio_flags(np, "gpio_chip_en", 0, &flags);
 #elif (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 14, 0) <= LINUX_VERSION_CODE)
+		boot_data->host_gpio =
+			skw_of_get_named_gpio(np, "gpio_host_wake", 0);
+		boot_data->chip_gpio =
+			skw_of_get_named_gpio(np, "gpio_chip_wake", 0);
+		g_chipen_pin = boot_data->chip_en =
+			skw_of_get_named_gpio(np, "gpio_chip_en", 0);
+#else
 		boot_data->host_gpio =
 			of_get_named_gpio(np, "gpio_host_wake", 0);
 		boot_data->chip_gpio =
 			of_get_named_gpio(np, "gpio_chip_wake", 0);
 		g_chipen_pin = boot_data->chip_en =
 			of_get_named_gpio(np, "gpio_chip_en", 0);
+#endif
 #endif
 	}
 	boot_data->dma_type = skw_use_sdma?SDMA:ADMA;

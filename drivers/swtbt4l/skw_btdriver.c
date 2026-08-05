@@ -1067,7 +1067,11 @@ static int btseekwave_probe(struct platform_device *pdev)
     return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+static void btseekwave_remove(struct platform_device *pdev)
+#else
 static int btseekwave_remove(struct platform_device *pdev)
+#endif
 {
     int state = atomic_read(&atomic_close_sync);
 
@@ -1096,7 +1100,11 @@ static int btseekwave_remove(struct platform_device *pdev)
 
         if (!data)
         {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+            return;
+#else
             return 0;
+#endif
         }
         hdev = data->hdev;
         data->bt_is_open = 0;
@@ -1121,7 +1129,11 @@ static int btseekwave_remove(struct platform_device *pdev)
 #endif
     }
     SKWBT_INFO("func %s end", __func__);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+    return;
+#else
     return 0;
+#endif
 }
 
 static struct platform_driver  btseekwave_driver =

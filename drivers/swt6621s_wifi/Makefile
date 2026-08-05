@@ -61,7 +61,7 @@ ccflags-y += -I$(srctree)/include/linux/platform_data/
 CFLAGS_trace.o := -I$(src)
 $(obj)/skw_core.o : $(obj)/version.h
 
-skw_abs_path := $(addprefix $(abspath $(srctree))/,$(filter-out /%,$(src)))$(filter /%,$(src))
+skw_abs_path := $(abspath $(src))
 $(obj)/version.h: $(skw_abs_path)/genver.pl
 	@$(PERL) -s $(skw_abs_path)/genver.pl $@
 

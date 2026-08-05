@@ -923,6 +923,15 @@ skw_tdls_build_send_direct(struct net_device *dev,
 
 	switch (action_code) {
 	case WLAN_PUB_ACTION_TDLS_DISCOVER_RES:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		skb_put(skb, 2 + sizeof(mgmt->u.action.tdls_discover_resp));
+		mgmt->u.action.category = WLAN_CATEGORY_PUBLIC;
+		mgmt->u.action.action_code = WLAN_PUB_ACTION_TDLS_DISCOVER_RES;
+		mgmt->u.action.tdls_discover_resp.dialog_token = dialog_token;
+		mgmt->u.action.tdls_discover_resp.capability =
+			status_code ? 0 : (WLAN_CAPABILITY_SHORT_SLOT_TIME |
+			 WLAN_CAPABILITY_SHORT_PREAMBLE);
+#else
 		skb_put(skb, 1 + sizeof(mgmt->u.action.u.tdls_discover_resp));
 		mgmt->u.action.category = WLAN_CATEGORY_PUBLIC;
 		mgmt->u.action.u.tdls_discover_resp.action_code =
@@ -932,6 +941,7 @@ skw_tdls_build_send_direct(struct net_device *dev,
 		mgmt->u.action.u.tdls_discover_resp.capability =
 			status_code ? 0 : (WLAN_CAPABILITY_SHORT_SLOT_TIME |
 			 WLAN_CAPABILITY_SHORT_PREAMBLE);
+#endif
 		break;
 
 	default:

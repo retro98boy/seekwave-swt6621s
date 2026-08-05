@@ -750,7 +750,9 @@ static inline void skw_wakeup_tx(struct skw_core *skw, ktime_t delay_kt)
 		if (hrtimer_active(timer))
 			hrtimer_set_expires(timer, delay_kt);
 		else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
 			timer->function = skw_tx_timer_callback;
+#endif
 			hrtimer_start(timer, delay_kt, HRTIMER_MODE_REL);
 		}
 	}

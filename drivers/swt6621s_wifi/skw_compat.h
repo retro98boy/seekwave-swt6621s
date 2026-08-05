@@ -90,6 +90,13 @@ extern int swt6621s_request_firmware_direct(const struct firmware **fw,
 #define SKW_BSS_MEMBERSHIP_SELECTOR_HT_PHY                        127
 #define SKW_BSS_MEMBERSHIP_SELECTOR_VHT_PHY                       126
 
+
+/* timer API rename: del_timer()/del_timer_sync() -> timer_delete()/timer_delete_sync() */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#define del_timer(timer)	timer_delete(timer)
+#define del_timer_sync(timer)	timer_delete_sync(timer)
+#endif
+
 #ifndef MIN_NICE
 #define MIN_NICE                                                  -20
 #endif
@@ -375,13 +382,21 @@ static inline int skw_set_wiphy_regd_sync(struct wiphy *wiphy,
 #endif
 }
 
+
+/* struct cfg80211_rx_assoc_resp was renamed to cfg80211_rx_assoc_resp_data */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#define SKW_RX_ASSOC_RESP_TYPE struct cfg80211_rx_assoc_resp_data
+#else
+#define SKW_RX_ASSOC_RESP_TYPE struct cfg80211_rx_assoc_resp
+#endif
+
 #ifdef __SKW_ANDROID__
 static inline void skw_compat_rx_assoc_resp(struct net_device *dev,
 			struct cfg80211_bss *bss, const u8 *buf, size_t len,
 			int uapsd, const u8 *req_ies, size_t req_ies_len)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	struct cfg80211_rx_assoc_resp_data  assoc_resp = {
+	SKW_RX_ASSOC_RESP_TYPE_data  assoc_resp = {
 		.buf = buf,
 		.len = len,
 		.req_ies = req_ies,
@@ -394,7 +409,7 @@ static inline void skw_compat_rx_assoc_resp(struct net_device *dev,
 
 	cfg80211_rx_assoc_resp(dev, &assoc_resp);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 74)
-	struct cfg80211_rx_assoc_resp assoc_resp = {
+	SKW_RX_ASSOC_RESP_TYPE assoc_resp = {
 		.buf = buf,
 		.len = len,
 		.req_ies = req_ies,
@@ -520,7 +535,7 @@ static inline void skw_compat_rx_assoc_resp(struct net_device *dev,
 			int uapsd, const u8 *req_ies, size_t req_ies_len)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	struct cfg80211_rx_assoc_resp assoc_resp = {
+	SKW_RX_ASSOC_RESP_TYPE assoc_resp = {
 		.buf = buf,
 		.len = len,
 		.req_ies = req_ies,

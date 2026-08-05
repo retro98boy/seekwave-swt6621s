@@ -385,7 +385,11 @@ void skwbt_log_port_init(void)
         memset(skwbt_log_port_info, 0, val_size);
         skwbt_log_port_info->is_open = 0;
 
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+        skwbt_log_port_info->skwbt_class = class_create("skwbtlog_port");
+#else
         skwbt_log_port_info->skwbt_class = class_create(THIS_MODULE, "skwbtlog_port");
+#endif
         if(IS_ERR(skwbt_log_port_info->skwbt_class))
         {
             //int ret =  PTR_ERR(skwbt_proc_log_info->skwbt_class);

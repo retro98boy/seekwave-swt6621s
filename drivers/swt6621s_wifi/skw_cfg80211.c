@@ -1686,7 +1686,11 @@ static int skw_sap_del_sta(struct wiphy *wiphy, struct net_device *dev,
 	ret = skw_cmd_del_sta(wiphy, dev, mac, subtype, reason, tx);
 	if (!ret) {
 		skw_peer_ctx_bind(iface, ctx, NULL);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		cfg80211_del_sta(dev->ieee80211_ptr, mac, GFP_KERNEL);
+#else
 		cfg80211_del_sta(dev, mac, GFP_KERNEL);
+#endif
 	}
 
 	return ret;
@@ -1893,8 +1897,13 @@ int skw_change_station(struct wiphy *wiphy, struct net_device *dev,
 				memset(&info, 0x0, sizeof(info));
 				ctx->peer->flags |= SKW_PEER_FLAGS_AUTHORIZED;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+				cfg80211_new_sta(iface->ndev->ieee80211_ptr,
+						ctx->peer->addr, &info, GFP_KERNEL);
+#else
 				cfg80211_new_sta(iface->ndev, ctx->peer->addr,
 						&info, GFP_KERNEL);
+#endif
 			}
 		}
 
@@ -1923,7 +1932,12 @@ int skw_change_station(struct wiphy *wiphy, struct net_device *dev,
 	return 0;
 }
 
-static int skw_cfg80211_change_station(struct wiphy *wiphy, struct net_device *dev,
+static int skw_cfg80211_change_station(struct wiphy *wiphy,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		struct wireless_dev *wdev,
+#else
+		struct net_device *dev,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
 			const u8 *mac,
 #else
@@ -1931,7 +1945,11 @@ static int skw_cfg80211_change_station(struct wiphy *wiphy, struct net_device *d
 #endif
 			struct station_parameters *params)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+	return skw_change_station(wiphy, wdev->netdev, (const u8 *)mac, params);
+#else
 	return skw_change_station(wiphy, dev, (const u8 *)mac, params);
+#endif
 }
 
 static int skw_set_sta_wep_key(struct wiphy *wiphy, struct skw_iface *iface,
@@ -2011,7 +2029,14 @@ int skw_del_station(struct wiphy *wiphy, struct net_device *dev,
 	return skw_sap_del_sta(wiphy, dev, ctx, subtype, reason);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+static int skw_cfg80211_del_station(struct wiphy *wiphy,
+		struct wireless_dev *wdev, struct station_del_parameters *params)
+{
+	return skw_del_station(wiphy, wdev->netdev, params->mac,
+			params->subtype, params->reason_code);
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 static int skw_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev,
 			   struct station_del_parameters *params)
 {
@@ -2089,7 +2114,12 @@ int skw_add_station(struct wiphy *wiphy, struct net_device *dev,
 	return 0;
 }
 
-static int skw_cfg80211_add_station(struct wiphy *wiphy, struct net_device *dev,
+static int skw_cfg80211_add_station(struct wiphy *wiphy,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		struct wireless_dev *wdev,
+#else
+		struct net_device *dev,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
 		    const u8 *mac,
 #else
@@ -2097,7 +2127,11 @@ static int skw_cfg80211_add_station(struct wiphy *wiphy, struct net_device *dev,
 #endif
 		    struct station_parameters *params)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+	return skw_add_station(wiphy, wdev->netdev, (const u8 *)mac, params);
+#else
 	return skw_add_station(wiphy, dev, (const u8 *)mac, params);
+#endif
 }
 
 static void skw_set_rate_info(struct skw_rate *rate, struct rate_info *rinfo)
@@ -2373,7 +2407,12 @@ static int skw_get_station(struct wiphy *wiphy, struct net_device *dev,
 	return ret;
 }
 
-static int skw_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
+static int skw_cfg80211_get_station(struct wiphy *wiphy,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+			   struct wireless_dev *wdev,
+#else
+			   struct net_device *dev,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
 			   const u8 *mac,
 #else
@@ -2381,7 +2420,11 @@ static int skw_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 #endif
 			   struct station_info *sinfo)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+	return skw_get_station(wiphy, wdev->netdev, (const u8 *)mac, sinfo);
+#else
 	return skw_get_station(wiphy, dev, (const u8 *)mac, sinfo);
+#endif
 }
 
 static void skw_scan_timeout(void *data)
@@ -3975,14 +4018,23 @@ static inline bool is_skw_rrm_report(const void *buf, int buf_len)
 	if (!ieee80211_is_action(mgmt->frame_control))
 		return false;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+	if (buf_len < IEEE80211_MIN_ACTION_SIZE(action_code) +
+		      sizeof(mgmt->u.action.measurement))
+#else
 	if (buf_len < IEEE80211_MIN_ACTION_SIZE +
 		      sizeof(mgmt->u.action.u.measurement))
+#endif
 		return false;
 
 	if (mgmt->u.action.category != SKW_WLAN_CATEGORY_RADIO_MEASUREMENT)
 		return false;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+	if (mgmt->u.action.action_code != WLAN_ACTION_SPCT_MSR_RPRT)
+#else
 	if (mgmt->u.action.u.measurement.action_code != WLAN_ACTION_SPCT_MSR_RPRT)
+#endif
 		return false;
 
 	return true;
@@ -4014,7 +4066,11 @@ static int __skw_cfg80211_mgmt_tx(struct wiphy *wiphy, struct skw_iface *iface,
 	if (!skw_cmd_data_len_in_limit(skw, frame_len + sizeof(struct skw_mgmt_tx_param))) {
 		if (is_skw_rrm_report(frame, frame_len)) {
 			int head_offset = offsetof(struct ieee80211_mgmt,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+					u.action.measurement.element_id);
+#else
 					u.action.u.measurement.element_id);
+#endif
 
 			int ret = -E2BIG;
 			int elem_len = 0, next_len = 0;
@@ -4278,7 +4334,11 @@ static int skw_leave_ibss(struct wiphy *wiphy, struct net_device *dev)
 			&params, sizeof(params), NULL, 0);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+static int skw_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed)
+#else
 static int skw_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+#endif
 {
 	int ret = 0;
 	struct skw_tlv_conf conf;
@@ -5306,8 +5366,13 @@ static int skw_change_bss(struct wiphy *wiphy, struct net_device *dev,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+static int skw_set_monitor_channel(struct wiphy *wiphy,
+		struct net_device *dev, struct cfg80211_chan_def *chandef)
+#else
 static int skw_set_monitor_channel(struct wiphy *wiphy,
 		struct cfg80211_chan_def *chandef)
+#endif
 {
 	return skw_cmd_monitor(wiphy, chandef, SKW_MONITOR_COMMON);
 }
@@ -5519,7 +5584,41 @@ static int skw_channel_switch(struct wiphy *wiphy, struct net_device *dev,
 #endif
 
 #ifdef __SKW_ANDROID__
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 74)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+static int skw_cfg80211_get_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+		int link_id, u8 key_idx, bool pairwise,
+		const u8 *mac_addr, void *cookie,
+		void (*callback)(void *cookie, struct key_params *params))
+{
+	return skw_get_key(wiphy, wdev->netdev, link_id, key_idx, pairwise,
+			mac_addr, cookie, callback);
+}
+
+static int skw_cfg80211_add_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+			int link_id, u8 key_idx, bool pairwise,
+			const u8 *addr, struct key_params *params)
+{
+	return skw_add_key(wiphy, wdev->netdev, link_id, key_idx, pairwise, addr, params);
+}
+
+static int skw_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+			int link_id, u8 key_idx, bool pairwise, const u8 *addr)
+{
+	return skw_del_key(wiphy, wdev->netdev, link_id, key_idx, pairwise, addr);
+}
+
+static int skw_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *dev,
+			       int link_id, u8 key_idx, bool unicast, bool multicast)
+{
+	return skw_set_default_key(wiphy, dev, link_id, key_idx, unicast, multicast);
+}
+
+static int skw_cfg80211_set_default_mgmt_key(struct wiphy *wiphy,
+		struct wireless_dev *wdev, int link_id, u8 key_idx)
+{
+	return skw_set_default_mgmt_key(wiphy, wdev->netdev, link_id, key_idx);
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 74)
 static int skw_cfg80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 		int link_id, u8 key_idx, bool pairwise,
 		const u8 *mac_addr, void *cookie,
@@ -5623,7 +5722,56 @@ static int skw_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 
 #else /* Linux */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+static int skw_cfg80211_get_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+		int link_id, u8 key_idx, bool pairwise,
+		const u8 *mac_addr, void *cookie,
+		void (*callback)(void *cookie, struct key_params *params))
+{
+	return skw_get_key(wiphy, wdev->netdev, link_id, key_idx, pairwise,
+			mac_addr, cookie, callback);
+}
+
+static int skw_cfg80211_add_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+			int link_id, u8 key_idx, bool pairwise,
+			const u8 *addr, struct key_params *params)
+{
+	return skw_add_key(wiphy, wdev->netdev, link_id, key_idx, pairwise, addr, params);
+}
+
+static int skw_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev,
+			int link_id, u8 key_idx, bool pairwise, const u8 *addr)
+{
+	return skw_del_key(wiphy, wdev->netdev, link_id, key_idx, pairwise, addr);
+}
+
+static int skw_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *dev,
+			       int link_id, u8 key_idx, bool unicast, bool multicast)
+{
+	return skw_set_default_key(wiphy, dev, link_id, key_idx, unicast, multicast);
+}
+
+static int skw_cfg80211_set_default_mgmt_key(struct wiphy *wiphy,
+		struct wireless_dev *wdev, int link_id, u8 key_idx)
+{
+	return skw_set_default_mgmt_key(wiphy, wdev->netdev, link_id, key_idx);
+}
+
+static int skw_cfg80211_disassoc(struct wiphy *wiphy, struct net_device *dev,
+			struct cfg80211_disassoc_request *req)
+{
+	bool tx = !req->local_state_change;
+	const u8 *bssid = req->ap_addr;
+
+	return skw_disassoc(wiphy, dev, bssid, req->reason_code, tx);
+}
+
+static int skw_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+		unsigned int link_id)
+{
+	return skw_stop_ap(wiphy, dev, link_id);
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 static int skw_cfg80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 		int link_id, u8 key_idx, bool pairwise,
 		const u8 *mac_addr, void *cookie,

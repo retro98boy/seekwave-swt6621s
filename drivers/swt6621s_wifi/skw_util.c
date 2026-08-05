@@ -85,7 +85,11 @@ void skw_file_close(struct file *fp)
 	filp_close(fp, NULL);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+#else
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
 #endif
 
 int skw_key_idx(unsigned long bitmap)
