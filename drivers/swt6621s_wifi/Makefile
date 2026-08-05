@@ -44,9 +44,9 @@ ifeq ($(CONFIG_ARCH_ROCKCHIP),y)
 ccflags-y += -DCONFIG_PLATFORM_ROCKCHIP
 endif
 
-ifneq ($(filter y,$(CONFIG_ANDROID_BINDER_IPC) $(CONFIG_SKW_ANDROID)),)
-ccflags-y += -D__SKW_ANDROID__
-endif
+# ifneq ($(filter y,$(CONFIG_ANDROID_BINDER_IPC) $(CONFIG_SKW_ANDROID)),)
+# ccflags-y += -D__SKW_ANDROID__
+# endif
 
 ifneq ($(skw_extra_flags),)
 ccflags-y += $(skw_extra_flags)
