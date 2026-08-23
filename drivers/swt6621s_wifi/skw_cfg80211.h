@@ -1074,4 +1074,6 @@ int skw_wow_disable(struct wiphy *wiphy);
 int skw_cmd_monitor(struct wiphy *wiphy, struct cfg80211_chan_def *chandef, u8 mode);
 int skw_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
 int skw_resume(struct wiphy *wiphy);
+int skw_peer_refresh_rate(struct wiphy *wiphy, struct net_device *dev,
+			  const u8 *mac);
 #endif

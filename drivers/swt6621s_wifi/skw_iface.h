@@ -242,6 +242,7 @@ struct skw_txba_ctrl {
 	u16 bitmap;
 	u16 blacklist;
 	unsigned long tx_timeout[SKW_NR_TID];
+	unsigned long stale[SKW_NR_TID];
 };
 
 enum skw_msdu_filter {
