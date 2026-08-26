@@ -2373,6 +2373,25 @@ static int skw_get_station(struct wiphy *wiphy, struct net_device *dev,
 	return ret;
 }
 
+/* Refresh peer->tx.rate / rx.rate from firmware. GET_STA is the only source of
+ * TX rate; nothing pushes it, so a caller that needs it current must ask.
+ */
+int skw_peer_refresh_rate(struct wiphy *wiphy, struct net_device *dev,
+			  const u8 *mac)
+{
+	struct station_info *sinfo;
+	int ret;
+
+	sinfo = kzalloc(sizeof(*sinfo), GFP_KERNEL);
+	if (!sinfo)
+		return -ENOMEM;
+
+	ret = skw_get_station(wiphy, dev, mac, sinfo);
+	kfree(sinfo);
+
+	return ret;
+}
+
 static int skw_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
 			   const u8 *mac,
