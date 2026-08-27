@@ -1529,7 +1529,7 @@ int skw_sdio_rx_thread(void *p)
 					__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
 
 			if(fifo_ind == skw_sdio->cp_fifo_status && !is_timeout_kick) {
-				skw_sdio_info("line:%d cp fifo status(%d,%d) ret=%d\n",
+				skw_sdio_dbg("line:%d cp fifo status(%d,%d) ret=%d\n",
 						__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
 				skw_sdio_unlock_rx_ws(skw_sdio);
 				continue;
@@ -2441,13 +2441,13 @@ static int bt_service_start(void)
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 #if defined(SKW_BOOT_MEMPOWERON)
 	ktime_t cur, start_poll;
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 
 	cur = ktime_get();
 	if(skw_sdio->boot_data==NULL ||(skw_sdio->service_state_map & (1<<BT_SERVICE)))
 		return ret;
 
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 	mutex_lock(&skw_sdio->service_mutex);
 	if(skw_sdio->boot_data->iram_img_data && skw_sdio->service_index_map){
 		skw_sdio_info("just download the BT img!!\n");
@@ -2479,7 +2479,7 @@ static int bt_service_stop(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 
 	if(skw_sdio->boot_data ==NULL)
 		return ret;
@@ -2501,12 +2501,12 @@ static int wifi_service_start(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 
 	if (skw_sdio->boot_data==NULL ||(skw_sdio->service_state_map & (1<<WIFI_SERVICE)))
 		return 0;
 #if defined(SKW_BOOT_MEMPOWERON)
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 	mutex_lock(&skw_sdio->service_mutex);
 #if SKW_WIFIONLY_DEBUG//for the debug wifi only  setvalue 0
 	if(skw_sdio->boot_data->iram_img_data && glb_wifiready_done){
@@ -2514,7 +2514,7 @@ static int wifi_service_start(void)
 	if(skw_sdio->boot_data->iram_img_data && skw_sdio->service_index_map){
 #endif
 		//skw_sdio->service_index_map &= SKW_WIFI;
-		skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+		skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 #if 0
 		if(!skw_sdio->service_index_map){
 			skw_sdio_info("the first downkload firmware!!\n");
@@ -2531,7 +2531,7 @@ static int wifi_service_start(void)
 		skw_sdio_poweron_mem(SKW_WIFI);
 		skw_sdio->boot_data->skw_dloader_module(SKW_WIFI);
 	}
-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
 	if (skw_sdio->boot_data->wifi_start)
 		ret=skw_sdio->boot_data->wifi_start();
 	skw_sdio->service_index_map = SKW_WIFI;
@@ -2555,7 +2555,7 @@ static int wifi_service_stop(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
-	skw_sdio_info ("the ---debug---line:%d \n",__LINE__);
+	skw_sdio_dbg ("the ---debug---line:%d \n",__LINE__);
 	//debug code end
 	if(skw_sdio->boot_data ==NULL){
 		skw_sdio_info("no wifi service start before!!");

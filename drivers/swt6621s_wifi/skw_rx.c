@@ -1150,7 +1150,7 @@ static void skw_ampdu_reorder(struct skw_core *skw, struct skw_rx_desc *desc,
 		if (desc->amsdu_first_idx &&
 		    ether_addr_equal(skb->data, snap_hdr)) {
 			cb->amsdu_flags |= SKW_AMSDU_FLAG_TAINT;
-			skw_hex_dump("attack", skb->data, 14, true);
+			skw_hex_dump("attack", skb->data, 14, false);
 		}
 
 		if (desc->amsdu_last_idx) {
@@ -1295,7 +1295,7 @@ static void skw_rx_handler_drop_info(struct skw_core *skw, struct sk_buff *pskb,
 				skw->hw.rx_desc.msdu_offset -
 				skw->hw.rx_desc.hdr_offset;
 		if (printk_timed_ratelimit(&j, 5000))
-			skw_hex_dump("dump", pskb->data - msdu_offset, pskb->len+msdu_offset, true);
+			skw_hex_dump("dump", pskb->data - msdu_offset, pskb->len+msdu_offset, false);
 		// skw_hw_assert(skw, false);
 		return;
 	}
