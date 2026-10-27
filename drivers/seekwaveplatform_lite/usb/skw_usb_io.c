@@ -1837,7 +1837,12 @@ static int usb_loopcheck_entry(void *para)
 			bulkout_write(port, buffer+256, 9);
 			//bulkout_write_timeout(port->portno, buffer+256,9, &size, 300);
 		} else if (!strncmp(buffer, "BSPASSERT", 9)) {
-			sprintf(firmware_version, "%s\n%s\n", firmware_version, buffer);
+			size_t len = strnlen(firmware_version, sizeof(firmware_version));
+
+			if (len < sizeof(firmware_version))
+				scnprintf(firmware_version + len,
+					  sizeof(firmware_version) - len,
+					  "\n%.*s\n", read, buffer);
 			skw_usb_err("cmd:0x%x-%x-%x ack:%x-%x-%x event:0x%x-%x-%x delta time:%d:%d\n",
 			       last_sent_wifi_cmd[0],last_sent_wifi_cmd[1],last_sent_wifi_cmd[2],
 			       last_recv_wifi_ack[0],last_recv_wifi_ack[1],last_recv_wifi_ack[2],
@@ -1884,7 +1889,8 @@ static int usb_loopcheck_entry(void *para)
 			assert_info_print = 0;
 			modem_status = MODEM_ON;
 			memset(firmware_version, 0 , sizeof(firmware_version));
-			strncpy(firmware_version, buffer, read);
+			strscpy(firmware_version, buffer,
+				min_t(size_t, sizeof(firmware_version), read + 1));
 
 			modem_notify_event(DEVICE_BSPREADY_EVENT);
 			count = 0;
@@ -2067,7 +2073,7 @@ static int skw_usb_io_probe(struct usb_interface *interface,
 	iface_desc = interface->cur_altsetting;
 	if (iface_desc->string == NULL)
 		return -EINVAL;
-	sprintf(names, "%s", iface_desc->string);
+	strscpy(names, iface_desc->string, sizeof(names));
 
 	if (!strncmp(names, "Boot", 4))
 		dloader = 1;

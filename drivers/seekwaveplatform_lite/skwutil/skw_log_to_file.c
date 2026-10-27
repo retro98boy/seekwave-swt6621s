@@ -457,7 +457,13 @@ int skw_modem_save_mem(char *mem_path,unsigned int mem_len, unsigned int mem_add
 	unsigned int mem_size = mem_len;
 
 	memset(dump_mem_file, 0, sizeof(dump_mem_file));
-	sprintf(dump_mem_file,"%s/%s", log_path, mem_path);
+	ret = snprintf(dump_mem_file, sizeof(dump_mem_file), "%s/%s",
+		       log_path, mem_path);
+	if (ret < 0)
+		return ret;
+	if (ret >= sizeof(dump_mem_file))
+		return -ENAMETOOLONG;
+	ret = 0;
 	data_mem = kzalloc(SKW_MAX_BUF_SIZE, GFP_KERNEL);
 	if(!data_mem){
 		skwlog_log("the kzalloc dump buffer fail");

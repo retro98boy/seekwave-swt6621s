@@ -360,7 +360,7 @@ static int skw_config_intf(struct skw_cfg_intf *intf, char *value)
 				break;
 			}
 
-			strcpy(name, buff);
+			strscpy(name, buff, sizeof(name));
 
 			if (!strcmp(name, "/"))
 				clear_mode = true;
@@ -399,7 +399,7 @@ static int skw_config_intf(struct skw_cfg_intf *intf, char *value)
 
 	ifa->inst = inst;
 	ifa->iftype = iftype;
-	strcpy(ifa->name, name);
+	strscpy(ifa->name, name, sizeof(ifa->name));
 	skw_ether_copy(ifa->mac, mac);
 	set_bit(SKW_CFG_INTF_FLAG_VALID, &ifa->flags);
 
@@ -760,7 +760,7 @@ void skw_config_init(struct skw_config *conf)
 	conf->regd.country[1] = '0';
 
 	/* calib */
-	strcpy(conf->calib.project, "SEEKWAVE");
+	strscpy(conf->calib.project, "SEEKWAVE", sizeof(conf->calib.project));
 
 	INIT_LIST_HEAD(&conf->mib.init);
 	INIT_LIST_HEAD(&conf->mib.sta);
@@ -811,15 +811,20 @@ void skw_config_init(struct skw_config *conf)
 #endif
 
 #ifdef CONFIG_SWT6621S_CHIP_ID
-	if (strlen(CONFIG_SWT6621S_CHIP_ID))
-		strncpy(conf->calib.chip_alias_name, CONFIG_SWT6621S_CHIP_ID,
-			sizeof(conf->calib.chip_alias_name) - 1);
+	if (strlen(CONFIG_SWT6621S_CHIP_ID)) {
+		memset(conf->calib.chip_alias_name, 0,
+		       sizeof(conf->calib.chip_alias_name));
+		strscpy(conf->calib.chip_alias_name, CONFIG_SWT6621S_CHIP_ID,
+			sizeof(conf->calib.chip_alias_name));
+	}
 #endif
 
 #ifdef CONFIG_SWT6621S_PROJECT_NAME
-	if (strlen(CONFIG_SWT6621S_PROJECT_NAME))
-		strncpy(conf->calib.project, CONFIG_SWT6621S_PROJECT_NAME,
-			sizeof(conf->calib.project) - 1);
+	if (strlen(CONFIG_SWT6621S_PROJECT_NAME)) {
+		memset(conf->calib.project, 0, sizeof(conf->calib.project));
+		strscpy(conf->calib.project, CONFIG_SWT6621S_PROJECT_NAME,
+			sizeof(conf->calib.project));
+	}
 #endif
 
 	set_bit(SKW_CFG_WOWLAN_SUPPORT, &conf->wowlan.flags);

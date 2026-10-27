@@ -19,6 +19,11 @@
 #define __SKW_COMPAT_H__
 
 #include <linux/version.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
+#error "SeekWave requires Linux >= 4.3 for strscpy()"
+#endif
+
 #include <linux/skbuff.h>
 #include <net/cfg80211.h>
 #include <linux/proc_fs.h>

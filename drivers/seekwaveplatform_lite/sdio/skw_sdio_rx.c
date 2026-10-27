@@ -770,7 +770,11 @@ static int skw_sdio_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->device_active = 1;
 			complete(&skw_sdio->download_done);
 		} else if (!strncmp((char *)cmd, "BSPASSERT", 9)){
-			sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
+			size_t len = strnlen(firmware_version, sizeof(firmware_version));
+
+			if (len < sizeof(firmware_version))
+				scnprintf(firmware_version + len,
+					  sizeof(firmware_version) - len, ":%s\n", cmd);
 			debug_infos.cp_assert_time = skw_local_clock();
 #ifdef CONFIG_SEEKWAVE_PLD_RELEASE
 			if(!skw_sdio->cp_state && sdio_ports[log_port_num].state != PORT_STATE_OPEN)
@@ -832,13 +836,7 @@ static int skw_sdio_handle_packet(struct skw_sdio_data_t *skw_sdio,
 #endif
 		}else if (!strncmp("trunk_W", cmd, 7)) {
 			memset(firmware_version, 0 , sizeof(firmware_version));
-			if (strlen(cmd) > strlen(firmware_version)) {
-				strncpy(firmware_version, cmd, sizeof(firmware_version)-1);
-				firmware_version[sizeof(firmware_version)-1] = '\0';
-			} else {
-				strncpy(firmware_version, cmd, strlen(cmd));
-				//strcpy(firmware_version, cmd);
-			}
+			strscpy(firmware_version, cmd, sizeof(firmware_version));
 			cmd = strstr(firmware_version, "slp=");
 			if (cmd)
 				cp_detect_sleep_mode = cmd[4] - 0x30;
@@ -996,7 +994,11 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->device_active = 1;
 			complete(&skw_sdio->download_done);
 		} else if (!strncmp((char *)cmd, "BSPASSERT", 9)) {
-			sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
+			size_t len = strnlen(firmware_version, sizeof(firmware_version));
+
+			if (len < sizeof(firmware_version))
+				scnprintf(firmware_version + len,
+					  sizeof(firmware_version) - len, ":%s\n", cmd);
 			debug_infos.cp_assert_time = skw_local_clock();
 #ifdef CONFIG_SEEKWAVE_PLD_RELEASE
 			if(!skw_sdio->cp_state && sdio_ports[log_port_num].state != PORT_STATE_OPEN)
@@ -1061,13 +1063,7 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 
 		}else if (!strncmp("trunk_W", cmd, 7)) {
 			memset(firmware_version, 0 , sizeof(firmware_version));
-			if (strlen(cmd) > strlen(firmware_version)) {
-				strncpy(firmware_version, cmd, sizeof(firmware_version)-1);
-				firmware_version[sizeof(firmware_version)-1] = '\0';
-			} else {
-				strncpy(firmware_version, cmd, strlen(cmd));
-				//strcpy(firmware_version, cmd);
-			}
+			strscpy(firmware_version, cmd, sizeof(firmware_version));
 			cmd = strstr(firmware_version, "slp=");
 			if (cmd)
 				cp_detect_sleep_mode = cmd[4] - 0x30;

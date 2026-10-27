@@ -7,8 +7,8 @@
 #define __BOOT_CONFIG_H__
 #include <linux/types.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-#error "SeekWave requires Linux >= 3.17 for the GPIO descriptor consumer API"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
+#error "SeekWave requires Linux >= 4.3 for strscpy() and the GPIO descriptor API"
 #endif
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>

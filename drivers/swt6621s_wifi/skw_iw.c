@@ -906,7 +906,7 @@ int skw_wow_filter_set(struct net_device *dev, u8 *param, int len, char *resp,
 	char t_rule[SKW_MAX_WOW_USER_RULE_LEN] = {0};
 	u8 protocol = PAT_TYPE_ETH;
 
-	if (!param)
+	if (!param || len <= 0)
 		return -EINVAL;
 
 	data = SKW_ZALLOC(SKW_IW_WOW_BUF_SIZE, GFP_KERNEL);
@@ -978,6 +978,8 @@ int skw_wow_filter_set(struct net_device *dev, u8 *param, int len, char *resp,
 
 	//Add wow filter by idx
 	if (!strncmp(hex, "idx=", strlen("idx="))) {
+		/* Save the NUL-terminated command before tokenizing it. */
+		strscpy(t_rule, hex, sizeof(t_rule));
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
 			skw_dev_err(dev, "idx param\n");
@@ -1009,10 +1011,6 @@ int skw_wow_filter_set(struct net_device *dev, u8 *param, int len, char *resp,
 			ret = -EINVAL;
 			goto free;
 		}
-
-		//Store the temp rule
-		memset(t_rule, 0, SKW_MAX_WOW_USER_RULE_LEN);
-		strncpy(t_rule, param, min_t(int, SKW_MAX_WOW_USER_RULE_LEN, len));
 
 		//Translate the wow filter to skw rules
 		rule = &wow_rules_set.rules[rule_idx];
@@ -1205,7 +1203,8 @@ int skw_wow_filter_set(struct net_device *dev, u8 *param, int len, char *resp,
 		//Store the rule
 		wow_user_rules.en_bitmap |=  (1ULL << rule_idx);
 		memset(wow_user_rules.rules[rule_idx], 0, SKW_MAX_WOW_USER_RULE_LEN);
-		strncpy(wow_user_rules.rules[rule_idx], t_rule, SKW_MAX_WOW_USER_RULE_LEN);
+		strscpy(wow_user_rules.rules[rule_idx], t_rule,
+			sizeof(wow_user_rules.rules[rule_idx]));
 
 		ret = 0;
 

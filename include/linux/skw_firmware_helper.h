@@ -10,6 +10,10 @@
 #include <linux/string.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
+#error "SeekWave requires Linux >= 4.3 for strscpy()"
+#endif
+
 /*
  * Read the first string from the Device Tree root "compatible" property
  * into @board_id.  If no DT or no compatible, @board_id stays empty.
@@ -18,7 +22,6 @@ static inline void skw_firmware_board_id_init(char *board_id, size_t size)
 {
 	struct device_node *root;
 	const char *compat;
-	int len;
 
 	if (!board_id || size == 0 || board_id[0])
 		return;
@@ -27,10 +30,9 @@ static inline void skw_firmware_board_id_init(char *board_id, size_t size)
 	if (!root)
 		return;
 
-	compat = of_get_property(root, "compatible", &len);
-	if (compat && len > 0) {
-		strncpy(board_id, compat, size - 1);
-		board_id[size - 1] = '\0';
+	if (!of_property_read_string(root, "compatible", &compat)) {
+		memset(board_id, 0, size);
+		strscpy(board_id, compat, size);
 		pr_info("skw firmware: board_id from DT compatible: %s\n", board_id);
 	}
 	of_node_put(root);
