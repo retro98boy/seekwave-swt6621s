@@ -18,6 +18,8 @@
 #ifndef __SKW_MSG_H__
 #define __SKW_MSG_H__
 
+#include "skw_compat.h"
+
 #include <net/cfg80211.h>
 #include "skw_core.h"
 #include "skw_rx.h"
@@ -247,7 +249,7 @@ struct skw_msg {
 	u16 seq;
 	u16 total_len;
 	u8 resv[2];
-	u16 data[0];
+	SKW_FLEX_ARRAY(u16, data);
 };
 
 struct skw_mgmt_hdr {
@@ -256,7 +258,7 @@ struct skw_mgmt_hdr {
 	s16 signal;
 	u16 mgmt_len;
 	u16 resv;
-	struct ieee80211_mgmt mgmt[0];
+	SKW_FLEX_ARRAY(struct ieee80211_mgmt, mgmt);
 } __packed;
 
 struct skw_tx_mgmt_status {
@@ -345,7 +347,7 @@ struct skw_frame_tx_status {
 	u8 status;
 	u8 resv;
 	u16 mgmt_len;
-	struct ieee80211_mgmt mgmt[0];
+	SKW_FLEX_ARRAY(struct ieee80211_mgmt, mgmt);
 } __packed;
 
 
@@ -367,7 +369,7 @@ struct skw_pkt_pattern {
 	u8 type_offset;
 	u16 offset;
 	u8 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 #define SKW_MAX_WOW_USER_RULE_LEN      128
@@ -382,7 +384,7 @@ struct skw_wow_rule {
 struct skw_wow_input_param {
 	u32 wow_flags;
 	u8 rule_num;
-	struct skw_wow_rule rules[0];
+	SKW_FLEX_ARRAY(struct skw_wow_rule, rules);
 } __packed;
 
 struct skw_wow_rules_set {
@@ -433,7 +435,7 @@ struct skw_rssi_mointor {
 struct skw_set_ie_param {
 	u8 type;
 	u16 len;
-	u8 ie[0];
+	SKW_FLEX_ARRAY(u8, ie);
 } __packed;
 
 static inline int skw_cmd_locked(struct semaphore *sem)

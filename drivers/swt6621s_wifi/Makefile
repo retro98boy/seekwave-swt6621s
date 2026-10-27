@@ -62,6 +62,9 @@ CFLAGS_trace.o := -I$(src)
 $(obj)/skw_core.o : $(obj)/version.h
 
 skw_abs_path := $(addprefix $(abspath $(srctree))/,$(filter-out /%,$(src)))$(filter /%,$(src))
+ifeq ($(shell test $(VERSION) -gt 7 -o \( $(VERSION) -eq 7 -a $(PATCHLEVEL) -ge 3 \) && echo y),y)
+skw_abs_path := $(abspath $(src))
+endif
 $(obj)/version.h: $(skw_abs_path)/genver.pl
 	@$(PERL) -s $(skw_abs_path)/genver.pl $@
 

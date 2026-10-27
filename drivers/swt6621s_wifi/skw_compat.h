@@ -33,6 +33,28 @@
 
 struct device;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#define skw_del_timer timer_delete
+#define skw_del_timer_sync timer_delete_sync
+#define SKW_FLEX_ARRAY(type, name) type name[]
+#else
+#define skw_del_timer del_timer
+#define skw_del_timer_sync del_timer_sync
+#define SKW_FLEX_ARRAY(type, name) type name[0]
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#define skw_cfg80211_del_sta(dev, ...) \
+	cfg80211_del_sta((dev)->ieee80211_ptr, __VA_ARGS__)
+#define skw_cfg80211_new_sta(dev, ...) \
+	cfg80211_new_sta((dev)->ieee80211_ptr, __VA_ARGS__)
+#define skw_cac_started(wdev) ((wdev)->links[0].cac_started)
+#else
+#define skw_cfg80211_del_sta cfg80211_del_sta
+#define skw_cfg80211_new_sta cfg80211_new_sta
+#define skw_cac_started(wdev) ((wdev)->cac_started)
+#endif
+
 /* Firmware loading with optional subdirectory and board-specific fallback */
 extern int swt6621s_request_firmware(const struct firmware **fw,
 				     const char *name,
@@ -524,7 +546,17 @@ static inline void skw_compat_rx_assoc_resp(struct net_device *dev,
 			struct cfg80211_bss *bss, const u8 *buf, size_t len,
 			int uapsd, const u8 *req_ies, size_t req_ies_len)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	struct cfg80211_rx_assoc_resp_data assoc_resp = {
+		.buf = buf,
+		.len = len,
+		.req_ies = req_ies,
+		.req_ies_len = req_ies_len,
+		.links[0].bss = bss,
+	};
+
+	cfg80211_rx_assoc_resp(dev, &assoc_resp);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
 	struct cfg80211_rx_assoc_resp assoc_resp = {
 		.buf = buf,
 		.len = len,

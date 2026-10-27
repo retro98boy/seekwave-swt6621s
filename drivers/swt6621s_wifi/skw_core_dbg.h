@@ -18,6 +18,8 @@
 #ifndef __SKW_CORE_DBG_H__
 #define __SKW_CORE_DBG_H__
 
+#include "skw_compat.h"
+
 #include "skw_core.h"
 
 #define RPI_MAX_LEVEL                            6
@@ -143,7 +145,7 @@ struct skw_hw_tx_info_rsp {
 	u16 status;
 	u16 tlv;
 	u16 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 /* TLV: SKW_MIB_GET_INST_INFO_E */
@@ -153,7 +155,7 @@ struct skw_inst_info_rsp {
 	u16 status;
 	u16 tlv;
 	u16 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 /* TLV: SKW_MIB_GET_PEER_INFO_E */
@@ -163,14 +165,14 @@ struct skw_peer_info_rsp {
 	u16 status;
 	u16 tlv;
 	u16 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 struct skw_hw_rx_info_rsp {
 	u16 status;
 	u16 tlv;
 	u16 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 struct skw_get_hw_rx_info {
@@ -197,7 +199,7 @@ struct skw_get_inst_tsf_rsp {
 	u16 status;
 	u16 tlv;
 	u16 len;
-	u8 val[0];
+	SKW_FLEX_ARRAY(u8, val);
 } __packed;
 
 struct skw_tx_hmac_per_peer_rpt_info {

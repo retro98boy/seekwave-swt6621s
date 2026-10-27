@@ -1430,6 +1430,9 @@ static int __skw_tx_init(struct skw_core *skw)
 	}
 
 	skw->tx_dy = alloc_workqueue("skwifid_dywq.%d",
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+			WQ_PERCPU |
+#endif
 			WQ_HIGHPRI | WQ_SYSFS,
 			0, skw->idx);
 	if (!skw->tx_dy) {

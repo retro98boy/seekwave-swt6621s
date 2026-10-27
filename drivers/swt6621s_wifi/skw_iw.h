@@ -18,6 +18,8 @@
 #ifndef __SKW_IW_H__
 #define __SKW_IW_H__
 
+#include "skw_compat.h"
+
 #define SKW_MAX_TLV_BUFF_LEN          1024
 
 #define SKW_KEEPACTIVE_RULE_SEND_CNT_DEF   1
@@ -31,14 +33,14 @@
 
 struct skw_keep_active_rule_data {
 	u16 is_chksumed;
-	u8 payload[0];
+	SKW_FLEX_ARRAY(u8, payload);
 } __packed;
 struct skw_keep_active_rule {
 	u32 keep_interval;
 	u8 send_cnt:7;
 	u8 always:1;
 	u8 payload_len;
-	struct skw_keep_active_rule_data data[0];
+	SKW_FLEX_ARRAY(struct skw_keep_active_rule_data, data);
 } __packed;
 
 struct skw_keep_active_setup {
@@ -49,7 +51,7 @@ struct skw_keep_active_setup {
 
 struct skw_keep_active_param {
 	u8 rule_num;
-	struct skw_keep_active_rule rules[0];
+	SKW_FLEX_ARRAY(struct skw_keep_active_rule, rules);
 } __packed;
 
 typedef int (*skw_at_handler)(struct skw_core *skw, void *param,

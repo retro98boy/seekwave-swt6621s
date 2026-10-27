@@ -89,7 +89,7 @@ static int skw_recovery_sta(struct wiphy *wiphy, struct skw_recovery_data *rd,
 			continue;
 
 		if (ether_addr_equal(peer->addr, core->bss.bssid)) {
-			del_timer_sync(&core->timer);
+			skw_del_timer_sync(&core->timer);
 			cancel_work_sync(&iface->sta.work);
 
 			ret = skw_cmd_unjoin(wiphy, dev, peer->addr,

@@ -220,7 +220,7 @@ void skw_timer_deinit(struct skw_core *skw)
 {
 	LIST_HEAD(flush_list);
 
-	del_timer(&skw->timer_data.timer);
+	skw_del_timer(&skw->timer_data.timer);
 
 	spin_lock_bh(&skw->timer_data.lock);
 	list_replace_init(&skw->timer_data.list, &flush_list);

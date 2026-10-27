@@ -18,6 +18,8 @@
 #ifndef __SKW_UTIL_H__
 #define __SKW_UTIL_H__
 
+#include "skw_compat.h"
+
 #include <linux/version.h>
 #include <linux/ieee80211.h>
 #include <net/cfg80211.h>
@@ -155,7 +157,7 @@ struct skw_template {
 	u16 head_len;
 	u16 tail_ofsset;
 	u16 tail_len;
-	struct ieee80211_mgmt mgmt[0];
+	SKW_FLEX_ARRAY(struct ieee80211_mgmt, mgmt);
 };
 
 struct skw_rate {
@@ -191,7 +193,7 @@ struct skw_element {
 struct skw_tlv {
 	u16 type;
 	u16 len;
-	char value[0];
+	SKW_FLEX_ARRAY(char, value);
 };
 
 struct skw_tlv_conf {

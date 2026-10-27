@@ -18,6 +18,8 @@
 #ifndef __SKW_CFG80211_H__
 #define __SKW_CFG80211_H__
 
+#include "skw_compat.h"
+
 #include <linux/ieee80211.h>
 #include "skw_msg.h"
 #include "skw_iface.h"
@@ -75,7 +77,7 @@ struct skw_tcp_keepalive_info {
 struct skw_tcp_keepalive_offload_tlv {
 	u8 resv[3];
 	u8 tcpinfo_num;
-	struct skw_tcp_keepalive_info tcpinfo[0];//tcpinfo[SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM];
+	SKW_FLEX_ARRAY(struct skw_tcp_keepalive_info, tcpinfo);//tcpinfo[SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM];
 } __packed;
 
 struct skw_tcp_keep_active_offload_set {
@@ -92,7 +94,7 @@ struct skw_suspend_t {
 	 */
 	u16 wow_flags;
 
-	struct skw_tlv tlv[0];
+	SKW_FLEX_ARRAY(struct skw_tlv, tlv);
 } __packed;
 
 
@@ -678,7 +680,7 @@ struct skw_mgmt_tx_param {
 	u8 band;
 	u8 dont_wait_for_ack;
 	u16 mgmt_frame_len;
-	struct ieee80211_mgmt mgmt[0];
+	SKW_FLEX_ARRAY(struct ieee80211_mgmt, mgmt);
 } __packed;
 
 struct skw_mgmt_register_param {

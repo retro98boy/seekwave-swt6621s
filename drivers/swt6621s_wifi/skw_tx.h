@@ -18,6 +18,8 @@
 #ifndef __SKW_TX_H__
 #define __SKW_TX_H__
 
+#include "skw_compat.h"
+
 #include <linux/virtio_ring.h>
 
 #include "skw_platform_data.h"
@@ -76,7 +78,7 @@ struct skw_tx_desc_hdr {
 	u16 eth_type;
 
 	/* pading for address align */
-	u8 gap[0];
+	SKW_FLEX_ARRAY(u8, gap);
 } __packed;
 
 struct skw_tx_desc_conf {

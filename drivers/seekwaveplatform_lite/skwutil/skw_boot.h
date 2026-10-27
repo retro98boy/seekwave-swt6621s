@@ -69,6 +69,9 @@ void skw_boot_abort(void);
 #define PLATFORM_DEVID_AUTO -1
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+#else
 #ifdef CONFIG_NO_GKI
 #if KERNEL_VERSION(5, 4, 0) <= LINUX_VERSION_CODE
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
@@ -78,6 +81,8 @@ MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif
 #endif
+
+#endif /* Linux 7.3 */
 
 /****************************************************************
  *Description:the skwsdio log define and the skwsdio data debug,
@@ -297,6 +302,9 @@ struct seekwave_device {
 };
 void seekwave_boot_exit(void);
 int seekwave_boot_init(char *chip_id);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+bool skw_boot_is_ready(void);
+#endif
 int skw_ucom_init(void);
 void skw_ucom_exit(void);
 int skw_bind_boot_driver(struct device *dev);

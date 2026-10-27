@@ -21,7 +21,6 @@
  *
  */
 
-
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
@@ -385,7 +384,11 @@ void skwbt_log_port_init(void)
         memset(skwbt_log_port_info, 0, val_size);
         skwbt_log_port_info->is_open = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+        skwbt_log_port_info->skwbt_class = class_create("skwbtlog_port");
+#else
         skwbt_log_port_info->skwbt_class = class_create(THIS_MODULE, "skwbtlog_port");
+#endif
         if(IS_ERR(skwbt_log_port_info->skwbt_class))
         {
             //int ret =  PTR_ERR(skwbt_proc_log_info->skwbt_class);
@@ -454,7 +457,6 @@ EXPORT_SYMBOL_GPL(skwbt_log_port_set_pdata);
 
 
 #endif
-
 
 
 

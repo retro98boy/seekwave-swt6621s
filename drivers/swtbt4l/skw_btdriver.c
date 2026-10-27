@@ -998,6 +998,10 @@ static int btseekwave_probe(struct platform_device *pdev)
     }
 
     SKWBT_INFO("%s pdev name %s\n", __func__, pdata->port_name);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    if (pdata->service_ready && !pdata->service_ready())
+        return -EPROBE_DEFER;
+#endif
 
     data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
     if (!data)
@@ -1124,6 +1128,13 @@ static int btseekwave_remove(struct platform_device *pdev)
     return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+static void btseekwave_remove_v73(struct platform_device *pdev)
+{
+    btseekwave_remove(pdev);
+}
+#endif
+
 static struct platform_driver  btseekwave_driver =
 {
     .driver = {
@@ -1132,7 +1143,11 @@ static struct platform_driver  btseekwave_driver =
         .pm     = NULL,
     },
     .probe      = btseekwave_probe,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    .remove     = btseekwave_remove_v73,
+#else
     .remove     = btseekwave_remove,
+#endif
 };
 
 int  btseekwave_init(void)
@@ -1176,4 +1191,3 @@ module_exit(btseekwave_exit);
 MODULE_DESCRIPTION("Seekwave Bluetooth driver ver " VERSION);
 MODULE_VERSION(VERSION);
 MODULE_LICENSE("GPL");
-

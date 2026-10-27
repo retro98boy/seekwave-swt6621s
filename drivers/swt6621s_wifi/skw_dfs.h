@@ -18,6 +18,8 @@
 #ifndef __SKW_DFS_H__
 #define __SKW_DFS_H__
 
+#include "skw_compat.h"
+
 #include <linux/ieee80211.h>
 #include <net/cfg80211.h>
 #include <linux/inetdevice.h>
@@ -93,7 +95,7 @@ struct skw_pulse_data {
 struct skw_radar_pulse {
 	u8 nr_pulse;
 	u8 resv;
-	struct skw_pulse_data data[0];
+	SKW_FLEX_ARRAY(struct skw_pulse_data, data);
 } __packed;
 
 struct skw_pulse_info {

@@ -51,6 +51,14 @@ unsigned char dl_signal_acount=0;
 struct platform_device *btboot_pdev;
 static u64 port_dmamask = DMA_BIT_MASK(32);
 static struct mutex boot_mutex;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+static bool skw_boot_ready;
+
+bool skw_boot_is_ready(void)
+{
+	return smp_load_acquire(&skw_boot_ready);
+}
+#endif
 static char *local_chip_id = "SV6160LITE";
 struct gpio_desc *skw_chip_enable_gpio = NULL;
 
@@ -713,6 +721,10 @@ static int seekwave_boot_probe(struct  platform_device *pdev)
 	}
 	boot_data->pdev = pdev;
 	ret = skw_first_boot(boot_data);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	/* Child drivers must not start services before firmware boot finishes. */
+	smp_store_release(&skw_boot_ready, !ret);
+#endif
 	if (ret) {
 		skw_boot_abort();
 		skw_free(boot_data->iram_img_data);
@@ -741,6 +753,9 @@ static int seekwave_boot_remove(struct  platform_device *pdev)
 #endif
 {
 	skwboot_log("%s the Enter \n", __func__);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	smp_store_release(&skw_boot_ready, false);
+#endif
 
 	if (btboot_pdev) {
 		platform_device_unregister(btboot_pdev);

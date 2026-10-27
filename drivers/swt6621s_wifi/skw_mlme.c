@@ -240,7 +240,7 @@ static void skw_mlme_ap_assoc_cb(struct skw_iface *iface,
 #endif
 		}
 
-		cfg80211_new_sta(iface->ndev, client->addr,
+		skw_cfg80211_new_sta(iface->ndev, client->addr,
 				 &info, GFP_KERNEL);
 		SKW_KFREE(client->assoc_req_ie);
 		client->assoc_req_ie = NULL;
@@ -849,7 +849,7 @@ int skw_mlme_ap_rx_mgmt(struct skw_iface *iface, u16 fc, int freq,
 
 		if (client->state >= SKW_STATE_ASSOCED) {
 			//notify hostapd to update state and delete sta
-			cfg80211_del_sta(iface->ndev, client->addr, GFP_KERNEL);
+			skw_cfg80211_del_sta(iface->ndev, client->addr, GFP_KERNEL);
 		} else if (client->state >= SKW_STATE_AUTHED) {
 			//just delete local sta info
 			skw_mlme_ap_del_sta(iface->wdev.wiphy,

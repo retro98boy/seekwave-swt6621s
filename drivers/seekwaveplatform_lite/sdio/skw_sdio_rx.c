@@ -2993,6 +2993,9 @@ struct sv6160_platform_data wifi_pdata = {
 	.callback_register = register_rx_callback,
 	.modem_assert = send_modem_assert_command,
 	.service_start = wifi_service_start,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	.service_ready = skw_boot_is_ready,
+#endif
 	.service_stop = wifi_service_stop,
 	.skw_dloader = skw_sdio_dloader,
 	.modem_register_notify = modem_register_notify,
@@ -3028,6 +3031,9 @@ struct sv6160_platform_data ucom_pdata = {
 	.close_port = close_sdio_port,
 	.modem_assert = send_modem_assert_command,
 	.service_start = bt_service_start,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	.service_ready = skw_boot_is_ready,
+#endif
 	.service_stop = bt_service_stop,
 	.modem_register_notify = modem_register_notify,
 	.modem_unregister_notify = modem_unregister_notify,

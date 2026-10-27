@@ -34,8 +34,9 @@
 #include <linux/firmware.h>
 #include <generated/utsrelease.h>
 #include <linux/suspend.h>
+#include <linux/version.h>
 
-#ifdef CONFIG_PLATFORM_ROCKCHIP
+#if defined(CONFIG_PLATFORM_ROCKCHIP) && LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
 #include <linux/rfkill-wlan.h>
 #endif
 
@@ -1514,6 +1515,9 @@ static void skw_buffer_deinit(struct skw_core *skw)
 
 static struct wakeup_source *skw_wakeup_source_init(const char *name)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	return wakeup_source_register(NULL, name);
+#else
 	struct wakeup_source *ws;
 
 	ws = wakeup_source_create(name);
@@ -1521,14 +1525,19 @@ static struct wakeup_source *skw_wakeup_source_init(const char *name)
 		wakeup_source_add(ws);
 
 	return ws;
+#endif
 }
 
 static void skw_wakeup_source_deinit(struct wakeup_source *ws)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wakeup_source_unregister(ws);
+#else
 	if (ws) {
 		wakeup_source_remove(ws);
 		wakeup_source_destroy(ws);
 	}
+#endif
 }
 
 static void skw_hw_hal_init(struct skw_core *skw, struct sv6160_platform_data *pdata)
@@ -1735,7 +1744,12 @@ static int skw_core_init(struct skw_core *skw, struct platform_device *pdev, int
 	atomic_set(&skw->txqlen_pending, 0);
 
 	spin_lock_init(&skw->dfs.skw_pool_lock);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	hrtimer_setup(&skw->timer, skw_tx_timer_callback, CLOCK_MONOTONIC,
+		      HRTIMER_MODE_REL);
+#else
 	hrtimer_init(&skw->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#endif
 	spin_lock_init(&skw->timer_lock);
 	INIT_LIST_HEAD(&skw->dfs.skw_pulse_pool);
 	INIT_LIST_HEAD(&skw->dfs.skw_pseq_pool);
@@ -2213,6 +2227,9 @@ static int skw_iface_init(struct wiphy *wiphy)
 
 	rtnl_lock();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_lock(wiphy);
+#endif
 	for (i = 0; i < SKW_NR_IFACE; i++) {
 		intf = &skw->config->intf.interface[i];
 
@@ -2249,6 +2266,9 @@ static int skw_iface_init(struct wiphy *wiphy)
 			iface->flags |= SKW_IFACE_FLAG_LEGACY_P2P_DEV;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_unlock(wiphy);
+#endif
 	rtnl_unlock();
 
 	return ret;
@@ -2261,9 +2281,15 @@ static void skw_iface_deinit(struct wiphy *wiphy)
 
 	rtnl_lock();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_lock(wiphy);
+#endif
 	for (i = 0; i < SKW_NR_IFACE; i++)
 		skw_del_iface(wiphy, skw->vif.iface[i]);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_unlock(wiphy);
+#endif
 	rtnl_unlock();
 }
 
@@ -2333,7 +2359,16 @@ static int skw_drv_probe(struct platform_device *pdev)
 	struct skw_chip_info chip;
 	struct wiphy *wiphy = NULL;
 	struct skw_core *skw = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	struct sv6160_platform_data *pdata = dev_get_platdata(&pdev->dev);
+	int idx;
+
+	if (pdata && pdata->service_ready && !pdata->service_ready())
+		return -EPROBE_DEFER;
+	idx = atomic_inc_return(&skw_chip_idx);
+#else
 	int idx = atomic_inc_return(&skw_chip_idx);
+#endif
 
 	skw_info("chip: %d, MAC: %pM\n", idx, skw_mac);
 
@@ -2367,7 +2402,7 @@ static int skw_drv_probe(struct platform_device *pdev)
 	    skw_sync_chip_info(wiphy, &chip))
 		goto core_deinit;
 
-#ifdef CONFIG_PLATFORM_ROCKCHIP
+#if defined(CONFIG_PLATFORM_ROCKCHIP) && LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
 	if (!is_valid_ether_addr(skw_mac))
 		rockchip_wifi_mac_addr(skw_mac);
 #endif
@@ -2388,12 +2423,18 @@ static int skw_drv_probe(struct platform_device *pdev)
 
 	rtnl_lock();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_lock(wiphy);
+#endif
 	skw_set_wiphy_regd(wiphy, skw->country);
 
 	if (skw->config->regd.country[0] != '0' &&
 	    skw->config->regd.country[1] != '0')
 		skw_set_regdom(wiphy, skw->config->regd.country);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	wiphy_unlock(wiphy);
+#endif
 	rtnl_unlock();
 
 	ret = skw_iface_init(wiphy);
@@ -2488,7 +2529,9 @@ static int skw_drv_remove(struct platform_device *pdev)
 
 static struct platform_driver skw_drv = {
 	.probe = skw_drv_probe,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	.remove = skw_drv_remove_new,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	.remove_new = skw_drv_remove_new,
 #else
 	.remove = skw_drv_remove,

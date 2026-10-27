@@ -19,6 +19,8 @@
 #ifndef __SKW_PLATFORM_DATA_H__
 #define __SKW_PLATFORM_DATA_H__
 
+#include <linux/version.h>
+
 #define MAX_PORT_COUNT 8
 
 #define	WIFIDATA_PORTNO	0
@@ -200,6 +202,9 @@ struct sv6160_platform_data {
 	void (*modem_unregister_notify)(struct notifier_block *nb);
 	int  (*wifi_get_credit)(void);
 	int  (*service_start)(void);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	bool (*service_ready)(void);
+#endif
 	int  (*service_stop)(void);
 	int  (*skw_dloader)(int index);
 	int  (*wifi_store_credit)(unsigned char val);

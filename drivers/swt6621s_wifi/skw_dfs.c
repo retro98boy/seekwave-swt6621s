@@ -517,11 +517,11 @@ static void skw_dfs_cac_work(struct work_struct *work)
 
 	skw_wdev_lock(&iface->wdev);
 
-	if (iface->wdev.cac_started) {
+	if (skw_cac_started(&iface->wdev)) {
 		skw_dfs_stop_cac(priv_to_wiphy(iface->skw), iface->ndev);
 
-		cfg80211_cac_event(iface->ndev, &iface->skw->dfs.chan,
-				NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
+		skw_compat_cfg80211_cac_event(iface->ndev, &iface->skw->dfs.chan,
+				NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
 	}
 
 	skw_wdev_unlock(&iface->wdev);
@@ -713,8 +713,8 @@ int skw_dfs_deinit(struct wiphy *wiphy, struct net_device *dev)
 
 		skw_dfs_stop_cac(wiphy, dev);
 
-		cfg80211_cac_event(dev, &skw->dfs.chan,
-				NL80211_RADAR_CAC_ABORTED, GFP_KERNEL);
+		skw_compat_cfg80211_cac_event(dev, &skw->dfs.chan,
+				NL80211_RADAR_CAC_ABORTED, GFP_KERNEL, 0);
 	}
 
 	if (test_bit(SKW_DFS_FLAG_MONITOR_MODE, &iface->sap.dfs.flags))
