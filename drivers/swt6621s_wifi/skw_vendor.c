@@ -270,8 +270,10 @@ static int skw_vendor_get_usable_channels(struct wiphy *wiphy,
 	skw_dbg("band_mask: 0x%x\n", req->band_mask);
 
 	max = ieee80211_get_num_supported_channels(wiphy);
+	if (!max)
+		return -ENOMEM;
 
-	chans = SKW_ZALLOC(max * sizeof(*chans), GFP_KERNEL);
+	chans = kcalloc(max, sizeof(*chans), GFP_KERNEL);
 	if (!chans)
 		return -ENOMEM;
 

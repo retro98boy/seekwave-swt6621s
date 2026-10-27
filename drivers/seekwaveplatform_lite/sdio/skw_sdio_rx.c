@@ -663,7 +663,7 @@ static int skw_pin_config(void)
 		return ret;
 	}
 
-	pin_val = (u32 *)kzalloc(PN_CNT * sizeof(u32), GFP_KERNEL);
+	pin_val = kcalloc(PN_CNT, sizeof(*pin_val), GFP_KERNEL);
 	if (!pin_val) {
 		skw_sdio_err("pin_val alloc failed\n");
 		return -ENOMEM;
@@ -1444,7 +1444,7 @@ struct scatterlist *skw_sdio_prepare_adma_buffer(struct skw_sdio_data_t *skw_sdi
 	int	i, j, data_size;
 	int	alloc_size = FRAGSZ_SIZE;
 
-	sgs = kzalloc((*sg_count) * sizeof(struct scatterlist), GFP_KERNEL);
+	sgs = kcalloc(*sg_count, sizeof(*sgs), GFP_KERNEL);
 	if(sgs == NULL)
 		return NULL;
 
@@ -2671,7 +2671,7 @@ static int __register_rx_callback(int id, void *func, void *para)
 	port->rx_submit = func;
 	port->rx_data = para;
 	if(func) {
-		port->sg_rx = kzalloc(MAX_SG_COUNT * sizeof(struct scatterlist), GFP_KERNEL);
+		port->sg_rx = kcalloc(MAX_SG_COUNT, sizeof(*port->sg_rx), GFP_KERNEL);
 		if(port->sg_rx == NULL)
 			return -ENOMEM;
 		port->state = PORT_STATE_OPEN;
