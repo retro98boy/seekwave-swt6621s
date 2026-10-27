@@ -460,10 +460,10 @@ static void dloader_work(struct work_struct *work)
 	if (!ret)
 		ret = dloader_execute_image(port, START_ADDR);
 
-	if (ret < 0 && chip_en_gpio >= 0) {
+	if (ret < 0 && chip_en_gpio != NULL) {
 		modem_status = MODEM_DOWNLOAD_FAILED;
 		skw_usb_info("download failed! power off device\n");
-		gpio_set_value(chip_en_gpio, 0);
+		gpiod_set_value(chip_en_gpio, 0);
 		msleep(10);
 	}
 }

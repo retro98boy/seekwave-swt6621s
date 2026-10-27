@@ -18,7 +18,7 @@
 #include <linux/list.h>
 #include <linux/err.h>
 #include <linux/wait.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include "skw_usb.h"
 #include "skw_usb_log.h"
 #include "skw_usb_debugfs.h"
@@ -79,8 +79,8 @@ static struct seekwave_device *usb_boot_data = NULL;
 static struct completion download_done;
 static struct completion loop_completion;
 static BLOCKING_NOTIFIER_HEAD(modem_notifier_list);
-static int chip_en_gpio;
-static int host_wake_gpio;
+static struct gpio_desc *chip_en_gpio;
+static struct gpio_desc *host_wake_gpio;
 static int modem_status;
 static int usb_speed_switching;
 static int cls_recovery_mode_en;
@@ -970,8 +970,8 @@ static int send_modem_service_command(u16 service, u16 command)
 	int timeout = 1000;
 	port = usb_ports[1];
 #ifndef MODEM_WDT_SUPPORT
-	if(usb_boot_data->chip_en < 0){
-		skw_usb_err("chip_en = %d Invalid Pls check HW !!\n", usb_boot_data->chip_en);
+	if(usb_boot_data->chip_en == NULL){
+		skw_usb_err("chip_en = %p Invalid Pls check HW !!\n", usb_boot_data->chip_en);
 		return ret;
 	}
 #endif
@@ -1078,7 +1078,7 @@ static int skw_BT_service_start(void)
 		return 0;
 
 #if defined(CONFIG_SEEKWAVE_PLD_RELEASE) && defined(MODEM_WDT_SUPPORT)
-	if (chip_en_gpio < 0){
+	if (chip_en_gpio == NULL){
 		cmd |= MODEM_WDT_SUPPORT;
 	}
 #endif
@@ -1124,7 +1124,7 @@ static int skw_WIFI_service_start(void)
 		return 0;
 	cmd |= WIFI_PORT_SHARE_FLAG;
 #if defined(CONFIG_SEEKWAVE_PLD_RELEASE) && defined(MODEM_WDT_SUPPORT)
-	if (chip_en_gpio < 0){
+	if (chip_en_gpio == NULL){
 		cmd |= MODEM_WDT_SUPPORT;
 	}
 #endif
@@ -2078,7 +2078,7 @@ static int skw_usb_io_probe(struct usb_interface *interface,
 		     udev->descriptor.idProduct, udev->product);
 #ifndef CONFIG_SV6160_LITE_FPGA
 	if ((udev->descriptor.idProduct != 0x6316) && !dloader
-		&& chip_en_gpio < 0 && modem_status == MODEM_OFF) {
+		&& chip_en_gpio == NULL && modem_status == MODEM_OFF) {
 #ifndef MODEM_WDT_SUPPORT
 		return -EINVAL;
 #endif
@@ -2393,17 +2393,11 @@ err0:
  ********************************************************************* */
 static int launch_download_work(char *data, int size,int addr)
 {
-	int chk_ports =0;
+	if (!usb_ports[0] || !usb_ports[0]->state)
+		return -ENODEV;
 	firmware_size = size;//link to usb_download size
 	firmware_data	= data;//link to usb_download dl_data
 	firmware_addr = addr;
-	do{
-		if((usb_ports[0] !=NULL)&&(usb_ports[0]->state)) {
-			chk_ports = 1;
-			break;
-		}
-		msleep(10);
-	}while(!chk_ports);
 	schedule_work(&usb_ports[0]->work);
 	return 0;
 }
@@ -2450,6 +2444,21 @@ static irqreturn_t skw_gpio_irq_handler(int irq, void *dev_id)
 }
 
 
+static void skw_usb_release_wake_gpio(void *data)
+{
+	struct gpio_desc *desc = data;
+
+	disable_irq_wake(gpiod_to_irq(desc));
+	host_wake_gpio = NULL;
+}
+
+void skw_boot_abort(void)
+{
+	/* First-boot errors occur before any download/device work is queued. */
+	chip_en_gpio = NULL;
+	usb_boot_data = NULL;
+}
+
 /************************************************************************
  *Decription:
  *Author:JUNWEI.JIANG
@@ -2463,24 +2472,43 @@ int skw_boot_loader(struct seekwave_device *boot_data)
 
 	if (usb_ports[0] && usb_ports[0]->suspend)
 		return -EOPNOTSUPP;
-	usb_boot_data= boot_data;
-	skw_usb_info("status:%d , chip_en_gpio=%d, gpio_in=%d", modem_status,
-		       	usb_boot_data->chip_en, usb_boot_data->gpio_in);
-	chip_en_gpio = usb_boot_data->chip_en;
+	skw_usb_info("status:%d , chip_en_gpio=%p, gpio_in=%p", modem_status,
+		     boot_data->chip_en, boot_data->gpio_in);
 #ifdef CONFIG_SKW_DL_TIME_STATS
 	cur_time = ktime_get();
 #endif
-	if (host_wake_gpio < 0 && usb_boot_data->gpio_in>=0) {
+	if (host_wake_gpio == NULL && boot_data->gpio_in != NULL) {
 		int irq_num;
+		unsigned long irq_flags;
 
-		host_wake_gpio = usb_boot_data->gpio_in;
-		irq_num = gpio_to_irq(host_wake_gpio);		
-		ret = request_irq(irq_num, skw_gpio_irq_handler,
-				IRQF_TRIGGER_RISING | IRQF_ONESHOT, "skw-gpio-irq", NULL);
+		irq_num = gpiod_to_irq(boot_data->gpio_in);
+		if (irq_num < 0)
+			return irq_num;
+		irq_flags = gpiod_is_active_low(boot_data->gpio_in) ?
+			IRQF_TRIGGER_FALLING : IRQF_TRIGGER_RISING;
+		ret = devm_request_irq(&boot_data->pdev->dev, irq_num,
+				skw_gpio_irq_handler, irq_flags | IRQF_ONESHOT,
+				"skw-gpio-irq", NULL);
 		skw_usb_info("request_gpio_irq ret=%d\n", ret);
-		if (ret == 0)
-			enable_irq_wake(irq_num);
+		if (ret)
+			return ret;
+		ret = enable_irq_wake(irq_num);
+		if (ret) {
+			devm_free_irq(&boot_data->pdev->dev, irq_num, NULL);
+			return ret;
+		}
+		ret = devm_add_action(&boot_data->pdev->dev,
+				skw_usb_release_wake_gpio, boot_data->gpio_in);
+		if (ret) {
+			disable_irq_wake(irq_num);
+			devm_free_irq(&boot_data->pdev->dev, irq_num, NULL);
+			return ret;
+		}
+		host_wake_gpio = boot_data->gpio_in;
 	}
+	/* Publish only after all fallible GPIO/IRQ setup has completed. */
+	usb_boot_data = boot_data;
+	chip_en_gpio = boot_data->chip_en;
 	if(!boot_data->first_dl_flag ){
 		if (usb_ports[0] && !usb_ports[0]->is_dloader) {
 			//usb_setup_service_devices();
@@ -2546,7 +2574,7 @@ int skw_reset_bus_dev(void)
 	struct usb_port_struct *port;
 	int ret = -1;
 
-	if(chip_en_gpio >= 0) {
+	if(chip_en_gpio != NULL) {
 		skw_chip_power_reset();
 		return 0;
 	}
@@ -2667,10 +2695,10 @@ static void skw_usb_io_disconnect(struct usb_interface *interface)
 		kfree(port);
 	else
 		wake_up_interruptible(&port->rx_wait);
-	if (chip_en_gpio >= 0 && MODEM_DOWNLOAD_FAILED == modem_status) {
+	if (chip_en_gpio != NULL && MODEM_DOWNLOAD_FAILED == modem_status) {
 		modem_status = MODEM_HALT;
 		msleep(50);
-		gpio_set_value(chip_en_gpio, 1);
+		gpiod_set_value(chip_en_gpio, 1);
 		skw_usb_info("retry to boot device\n");
 	}
 }
@@ -2840,7 +2868,7 @@ static int __init skw_usb_io_init(void)
 	init_completion(&loop_completion);
 	skw_usb_debugfs_init();
 	skw_usb_log_level_init();
-	chip_en_gpio = -1;
+	chip_en_gpio = NULL;
 	modem_status = MODEM_OFF;
 	skw_chipid = wifi_pdata.chipid;
 	mutex_init(&g_recovery_data.except_mutex);
@@ -2867,7 +2895,7 @@ static void __exit skw_usb_io_exit(void)
 {
 	int ret;
 
-	if (chip_en_gpio >=0) {
+	if (chip_en_gpio != NULL) {
 		skw_chip_set_power(0);
 		msleep(200);
 		skw_chip_set_power(1);
@@ -2883,7 +2911,6 @@ static void __exit skw_usb_io_exit(void)
 		wifi_data_pdev = NULL;
 		ret = 0;
 	}
-	seekwave_boot_exit();
 	skw_usb_debugfs_deinit();
 	cancel_delayed_work_sync(&skw_except_work);
 	cancel_work_sync(&add_device_work);
@@ -2891,10 +2918,18 @@ static void __exit skw_usb_io_exit(void)
 	cancel_work_sync(&usb_control_worker);
 	dump_memory_buffer = NULL;
 	dump_log_size=NULL;
-	mutex_destroy(&g_recovery_data.except_mutex);
 	if(bluetooth_pdev)
 		platform_device_put(bluetooth_pdev);
 	usb_deregister(&skw_usb_io_driver);
+	/* Disconnect can schedule work; drain it before releasing GPIOs. */
+	cancel_delayed_work_sync(&skw_except_work);
+	cancel_work_sync(&add_device_work);
+	cancel_work_sync(&dump_memory_worker);
+	cancel_work_sync(&usb_control_worker);
+	seekwave_boot_exit();
+	chip_en_gpio = NULL;
+	usb_boot_data = NULL;
+	mutex_destroy(&g_recovery_data.except_mutex);
 	if(wifi_data_pdev)
 		platform_device_put(wifi_data_pdev);
 

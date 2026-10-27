@@ -6,7 +6,11 @@
 #ifndef __BOOT_CONFIG_H__
 #define __BOOT_CONFIG_H__
 #include <linux/types.h>
-#include <linux/gpio.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
+#error "SeekWave requires Linux >= 3.17 for the GPIO descriptor consumer API"
+#endif
+#include <linux/gpio/consumer.h>
 #include <linux/delay.h>
 
 //#define CONFIG_SKW_FREE_FIRMWARE_MEM_SUPPORT 1
@@ -41,15 +45,6 @@
 //#define CONFIG_SKW_HOST_PLATFORM_AMLOGIC 1 /*supprot the aml  power on api*/
 //#define CONFIG_SKW_HOST_PLATFORM_FULLHAN /*support the fullhan power on api*/
 //#define CONFIG_SKW_HOST_PLATFORM_ROCKCHIP
-#ifdef CONFIG_SKW_NO_CONFIG
-#define  MODEM_ENABLE_GPIO   	-1
-#define  HOST_WAKEUP_GPIO_IN 	-1
-#define  MODEM_WAKEUP_GPIO_OUT  -1
-#else
-#define  MODEM_ENABLE_GPIO   	-1 /*wifi_chip power on gpio num*/
-#define  HOST_WAKEUP_GPIO_IN 	-1 /*host wake gpio num*/
-#define  MODEM_WAKEUP_GPIO_OUT  -1 /*chip wake gpio num*/
-#endif
 
 
 #ifdef SKW_NV_CONFIG_NAME_ALONE
@@ -64,7 +59,6 @@
 
 //#define  SKW_IRAM_FILE_PATH  "/vendor/firmware/SWT6621S_IRAM_USB.bin"
 //#define  SKW_DRAM_FILE_PATH  "/vendor/firmware/SWT6621S_DRAM_USB.bin"
-#define  SKW_POWER_OFF_VALUE   0
 
 #define SKW_DUMP_BUFFER_SIZE     (1500*1024)
 #define POWERON_DELAY_TIME  200
@@ -91,19 +85,6 @@
 #endif
 
 //#define  USB_POWEROFF_IN_LOWPOWER  1
-#define SKW_CHIP_POWEROFF(gpiono) \
-{ \
-	if(gpiono >= 0) { \
-		gpio_set_value(gpiono>>1, (gpiono&0x01)); \
-	} \
-}
-
-#define SKW_CHIP_POWERON(gpiono) \
-{ \
-	if(gpiono >= 0) { \
-	gpio_set_value(gpiono>>1, 1-(gpiono&0x01)); \
-	} \
-}
 #define SKW_MMC_HOST_SD_INDEX  1 //default sd index is 1 if not 1 pls set to 0 or 2
 
 #if defined(CONFIG_SKW_HOST_PLATFORM_FULLHAN)
@@ -123,10 +104,10 @@ extern int get_custom_mac_address(int fmt, char *name, char *addr);
 extern int rockchip_wifi_power(int on);
 extern int rockchip_wifi_set_carddetect(int val);
 #else
-extern int skw_chipen_gpio_reset(int on);
+extern int skw_chip_enable_set(int on);
 static inline int skw_chip_power_ops(int on)
 {
-	return skw_chipen_gpio_reset(on);
+	return skw_chip_enable_set(on);
 }
 #endif
 
@@ -138,9 +119,6 @@ static inline void skw_chip_set_power(int on)
 	sunxi_wlan_set_power(on);
 #elif defined(CONFIG_SKW_HOST_PLATFORM_ROCKCHIP)
 	rockchip_wifi_power(on);
-#elif defined(CONFIG_SKW_HOST_PLATFORM_HISI_BIGFISH)
-	hi_drv_gpio_set_dir_bit(MODEM_ENABLE_GPIO, 0);
-	hi_drv_gpio_write_bit(MODEM_ENABLE_GPIO, on);
 #else
 	skw_chip_power_ops(on);
 #endif
@@ -163,12 +141,6 @@ static inline void skw_chip_power_reset(void)
 	rockchip_wifi_power(0);
 	msleep(POWERON_DELAY_TIME);
 	rockchip_wifi_power(1);
-#elif defined(CONFIG_SKW_HOST_PLATFORM_HISI_BIGFISH)
-	printk("hisi skw chip power reset !!\n");
-	hi_drv_gpio_set_dir_bit(MODEM_ENABLE_GPIO,0);
-	hi_drv_gpio_write_bit(MODEM_ENABLE_GPIO,0);
-	msleep(POWERON_DELAY_TIME);
-	hi_drv_gpio_write_bit(MODEM_ENABLE_GPIO,1);
 #else
 	printk("self skw chip power reset !!\n");
 	skw_chip_power_ops(0);

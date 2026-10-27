@@ -41,6 +41,9 @@
 #include <linux/pm_wakeup.h>
 #endif
 #include "boot_config.h"
+
+/* Roll back transport references before a failed boot probe releases GPIOs. */
+void skw_boot_abort(void);
 #if KERNEL_VERSION(4, 14, 0) <= LINUX_VERSION_CODE
 #define skw_read_file	kernel_read
 #define skw_write_file  kernel_write
@@ -282,17 +285,15 @@ struct seekwave_device {
 	int all_dl_count;
 	int bt_dl_count;
 	int wifi_dl_count;
-	int host_gpio; /*GPIO0_A3*/
-	int chip_gpio; /*GPIO2_D2*/
-	int chip_en; /*GPIO0_B1*/
+	struct gpio_desc *host_gpio; /* CP-to-host wake input */
+	struct gpio_desc *chip_gpio; /* Host-to-CP wake output */
+	struct gpio_desc *chip_en; /* Chip enable output */
 	int bt_service_state;
 	int wifi_service_state;
 	int service_ops;
 	int dl_done_signal;
-	int gpio_out; //host wakeup gpio0:/*GPIO0_A3*/,chip_wakeup gpio2:/*GPIO2_D2*/
-	int gpio_in; //host wakeup gpio 0
-	int gpio_val;
-	int gpio_next_val;
+	struct gpio_desc *gpio_out; /* Transport alias of chip_gpio */
+	struct gpio_desc *gpio_in; /* Transport alias of host_gpio */
 };
 void seekwave_boot_exit(void);
 int seekwave_boot_init(char *chip_id);

@@ -17,7 +17,7 @@
 #include <linux/list.h>
 #include <linux/timer.h>
 #include <linux/err.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/skbuff.h>
 #include "skw_sdio.h"
@@ -349,6 +349,8 @@ void skw_sdio_exception_work(struct work_struct *work)
 	int i=0;
 	int port_num=5;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	if (atomic_read(&skw_sdio->stopping))
+		return;
 	skw_sdio_info(" entern..cp_state = %d.\n", skw_sdio->cp_state);
 	mutex_lock(&skw_sdio->except_mutex);
 	if(skw_sdio->cp_state!=1)
@@ -530,16 +532,20 @@ int skw_sdio_wifi_serv_debug_status(void)
 static int force_cp_wakeup(void)
 {
 	int ret = 0;
-	u32 val = 0;
+	int val;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 
+	if (!skw_sdio->gpio_in || !skw_sdio->gpio_out)
+		return -EOPNOTSUPP;
 	send_cp_wakeup_signal(skw_sdio);
 	ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, HZ/100);
 	if (ret <= 0) {
 		skw_sdio_err("wait for device wakeup timeout\n");
 		return -ETIMEDOUT;
 	}
-	val = gpio_get_value(skw_sdio->gpio_in);
+	val = gpiod_get_value(skw_sdio->gpio_in);
+	if (val < 0)
+		return val;
 	if(val)
 		return 0;
 	else {
@@ -547,7 +553,9 @@ static int force_cp_wakeup(void)
 		ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, HZ/100);
 		if (ret == 0)
 			return -ETIMEDOUT;
-		val = gpio_get_value(skw_sdio->gpio_in);
+		val = gpiod_get_value(skw_sdio->gpio_in);
+		if (val < 0)
+			return val;
 		if(val)
 			return 0;
 		else
@@ -1513,8 +1521,8 @@ int skw_sdio_rx_thread(void *p)
 		}
 		skw_resume_check();
 		if (skw_sdio->irq_type == SKW_SDIO_EXTERNAL_IRQ) {
-			int value = gpio_get_value(skw_sdio->gpio_in);
-			if(value == 0) {
+			int value = gpiod_get_value(skw_sdio->gpio_in);
+			if(value <= 0) {
 				skw_sdio_warn("line %d gpio_in:%d\n",__LINE__, value);
 				skw_sdio_unlock_rx_ws(skw_sdio);
 				continue;
@@ -1663,7 +1671,7 @@ submit_packets:
 	return 0;
 }
 
-static int open_sdio_port(int id, void *callback, void *data)
+static int __open_sdio_port(int id, void *callback, void *data)
 {
 	struct sdio_port *port;
 	if(id >= max_ch_num)
@@ -1690,6 +1698,20 @@ static int open_sdio_port(int id, void *callback, void *data)
 	skw_sdio_info("%s(%d) %s portno = %d\n", current->comm, current->pid, __func__, id);
 	return 0;
 }
+
+
+static int open_sdio_port(int id, void *callback, void *data)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __open_sdio_port(id, callback, data);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 static int close_sdio_port(int id)
 {
 	struct sdio_port *port;
@@ -1714,20 +1736,32 @@ void kill_BT_rx_transfer(void)
 	for (i=SDIO2_BT_CMD_PORT; i<SDIO2_WIFI_CMD_PORT; i++)
 		close_sdio_port(i);
 }
-void send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio)
+static void __send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio)
 {
-	uint32_t value = 0;
+	int value;
 	uint32_t timeout = 2000, timeout1 = 20;
-	if(skw_sdio->gpio_out>=0 && skw_sdio->gpio_in>=0 && skw_sdio->resume_com) {
+	if(skw_sdio->gpio_out != NULL && skw_sdio->gpio_in != NULL && skw_sdio->resume_com) {
 		skw_sdio_dbg("%s enter gpio=0\n", __func__);
 		skw_sdio->host_active = 0;
-		if (gpio_get_value(skw_sdio->gpio_in) == 0) {
+		value = gpiod_get_value(skw_sdio->gpio_in);
+		if (value < 0)
+			return;
+		if (value == 0) {
 			udelay(10);
-			if (gpio_get_value(skw_sdio->gpio_in) == 0) {
+			value = gpiod_get_value(skw_sdio->gpio_in);
+			if (value < 0)
+				return;
+			if (value == 0) {
+				if (skw_sdio->irq_num < 0)
+					return;
 				disable_irq(skw_sdio->irq_num);
-				gpio_set_value(skw_sdio->gpio_out, 0);
+				gpiod_set_value(skw_sdio->gpio_out, 0);
 				do {
-					value = gpio_get_value(skw_sdio->gpio_in);
+					value = gpiod_get_value(skw_sdio->gpio_in);
+					if (value < 0) {
+						enable_irq(skw_sdio->irq_num);
+						return;
+					}
 					if (value || timeout1 == 0) {
 						skw_sdio_info("%s cp sts:%d in %d ms\n", __func__, value, 20 - timeout1);
 						enable_irq(skw_sdio->irq_num);
@@ -1737,12 +1771,12 @@ void send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio)
 				} while(timeout1--);
 			}
 		}
-		gpio_set_value(skw_sdio->gpio_out, 0);
+		gpiod_set_value(skw_sdio->gpio_out, 0);
 next:
 		skw_sdio->device_active = 0;
 		do {
-			value = gpio_get_value(skw_sdio->gpio_in);
-			if(value == 0)
+			value = gpiod_get_value(skw_sdio->gpio_in);
+			if(value <= 0)
 				break;
 			udelay(10);
 		}while(timeout--);
@@ -1750,49 +1784,69 @@ next:
 		skw_sdio_dbg("%s enter\n", __func__);
 }
 
-void send_host_resume_indication(struct skw_sdio_data_t *skw_sdio)
+
+void send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio)
 {
-	if(skw_sdio->gpio_out >= 0) {
+	if (skw_sdio_io_get(skw_sdio))
+		return;
+	__send_host_suspend_indication(skw_sdio);
+	skw_sdio_io_put(skw_sdio);
+}
+static void __send_host_resume_indication(struct skw_sdio_data_t *skw_sdio)
+{
+	if(skw_sdio->gpio_out != NULL) {
 		skw_sdio_dbg("%s enter\n", __func__);
 		skw_sdio->host_active = 1;
-		gpio_set_value(skw_sdio->gpio_out, 1);
+		gpiod_set_value(skw_sdio->gpio_out, 1);
 		skw_sdio->resume_com = 1;
 	}
 }
 
+
+void send_host_resume_indication(struct skw_sdio_data_t *skw_sdio)
+{
+	if (skw_sdio_io_get(skw_sdio))
+		return;
+	__send_host_resume_indication(skw_sdio);
+	skw_sdio_io_put(skw_sdio);
+}
 void send_cp_wakeup_signal(struct skw_sdio_data_t *skw_sdio)
 {
-	if(skw_sdio->gpio_out < 0)
+	if(skw_sdio->gpio_out == NULL)
 		return;
 
-	gpio_set_value(skw_sdio->gpio_out, 0);
+	/* Reassert wake after an inactive interval; DT determines the edge. */
+	gpiod_set_value(skw_sdio->gpio_out, 0);
 	udelay(5);
-	gpio_set_value(skw_sdio->gpio_out, 1);
+	gpiod_set_value(skw_sdio->gpio_out, 1);
 }
 
 extern int skw_sdio_enable_async_irq(void);
-int try_to_wakeup_modem(int portno)
+static int __try_to_wakeup_modem(int portno)
 {
 	int ret = 0;
 	int val;
 	unsigned long flags;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 
-	if(skw_sdio->gpio_out < 0 || skw_sdio->gpio_in < 0
+	if(skw_sdio->gpio_out == NULL || skw_sdio->gpio_in == NULL
 		|| skw_sdio->gpio_out == skw_sdio->gpio_in)
 		return 0;
-	skw_sdio->device_active = gpio_get_value(skw_sdio->gpio_in);
+	val = gpiod_get_value(skw_sdio->gpio_in);
+	if (val < 0)
+		return val;
+	skw_sdio->device_active = val;
 
 	if(skw_sdio->device_active)
 		return 0;
 	skw_reinit_completion(skw_sdio->device_wakeup);
 	skw_sdio->tx_req_map |= 1<<portno;
-	skw_sdio_dbg("%s enter gpio_val=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
+	skw_sdio_dbg("%s enter device_active=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
 	skw_port_log(portno,"%s enter device_active=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
 	if(skw_sdio->device_active == 0) {
 		local_irq_save(flags);
 		if(skw_sdio->resume_com==0)
-			gpio_set_value(skw_sdio->gpio_out, 1);
+			gpiod_set_value(skw_sdio->gpio_out, 1);
 		else
 			send_cp_wakeup_signal(skw_sdio);
 		local_irq_restore(flags);
@@ -1802,7 +1856,11 @@ int try_to_wakeup_modem(int portno)
 			return -ETIMEDOUT;
 		}
 	}
-	val = gpio_get_value(skw_sdio->gpio_in);
+	val = gpiod_get_value(skw_sdio->gpio_in);
+	if (val < 0) {
+		skw_sdio->tx_req_map &= ~(1 << portno);
+		return val;
+	}
 	if(!val) {
 		local_irq_save(flags);
 		send_cp_wakeup_signal(skw_sdio);
@@ -1812,13 +1870,26 @@ int try_to_wakeup_modem(int portno)
 			skw_sdio->tx_req_map &= ~(1<<portno);
 			return -ETIMEDOUT;
 		}
-		val = gpio_get_value(skw_sdio->gpio_in);
+		val = gpiod_get_value(skw_sdio->gpio_in);
+		if (val < 0) {
+			skw_sdio->tx_req_map &= ~(1 << portno);
+			return val;
+		}
 	}
-	if ( val && !skw_sdio->sdio_func[FUNC_1]->irq_handler &&
-		!skw_sdio->resume_com && skw_sdio->irq_type == SKW_SDIO_INBAND_IRQ) {
+	if (!val) {
+		skw_sdio->tx_req_map &= ~(1 << portno);
+		return -ETIMEDOUT;
+	}
+	if (!skw_sdio->resume_com && skw_sdio->irq_type == SKW_SDIO_INBAND_IRQ) {
 		sdio_claim_host(skw_sdio->sdio_func[FUNC_1]);
-		ret=sdio_claim_irq(skw_sdio->sdio_func[FUNC_1],skw_sdio_inband_irq_handler);
-		ret = skw_sdio_enable_async_irq();
+		/* Another wake request may have installed the handler while we waited. */
+		ret = 0;
+		if (!skw_sdio->sdio_func[FUNC_1]->irq_handler) {
+			ret = sdio_claim_irq(skw_sdio->sdio_func[FUNC_1],
+					     skw_sdio_inband_irq_handler);
+			if (!ret)
+				ret = skw_sdio_enable_async_irq();
+		}
 		if (ret < 0)
 			skw_sdio_err("enable sdio async irq fail ret = %d\n", ret);
 		sdio_release_host(skw_sdio->sdio_func[FUNC_1]);
@@ -1827,26 +1898,44 @@ int try_to_wakeup_modem(int portno)
 	return ret;
 }
 
-int wakeup_modem(int portno)
+
+int try_to_wakeup_modem(int portno)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __try_to_wakeup_modem(portno);
+	if (ret < 0)
+		skw_sdio->tx_req_map &= ~(1 << portno);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+static int __wakeup_modem(int portno)
 {
 	int ret = 0;
 	int val;
 	unsigned long flags;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 
-	if(skw_sdio->gpio_out < 0 || skw_sdio->gpio_in < 0
+	if(skw_sdio->gpio_out == NULL || skw_sdio->gpio_in == NULL
 		|| skw_sdio->gpio_out == skw_sdio->gpio_in)
 		return 0;
-	skw_sdio->device_active = gpio_get_value(skw_sdio->gpio_in);
+	val = gpiod_get_value(skw_sdio->gpio_in);
+	if (val < 0)
+		return val;
+	skw_sdio->device_active = val;
 
 	skw_reinit_completion(skw_sdio->device_wakeup);
 	skw_sdio->tx_req_map |= 1<<portno;
-	skw_sdio_dbg("%s enter gpio_val=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
+	skw_sdio_dbg("%s enter device_active=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
 	skw_port_log(portno,"%s enter device_active=%d : %d\n", __func__, skw_sdio->device_active, skw_sdio->resume_com);
 
 	local_irq_save(flags);
 	if(skw_sdio->resume_com==0)
-		gpio_set_value(skw_sdio->gpio_out, 1);
+		gpiod_set_value(skw_sdio->gpio_out, 1);
 	else
 		send_cp_wakeup_signal(skw_sdio);
 	local_irq_restore(flags);
@@ -1856,7 +1945,11 @@ int wakeup_modem(int portno)
 		return -ETIMEDOUT;
 	}
 
-	val = gpio_get_value(skw_sdio->gpio_in);
+	val = gpiod_get_value(skw_sdio->gpio_in);
+	if (val < 0) {
+		skw_sdio->tx_req_map &= ~(1 << portno);
+		return val;
+	}
 	if(!val) {
 		local_irq_save(flags);
 		send_cp_wakeup_signal(skw_sdio);
@@ -1866,13 +1959,26 @@ int wakeup_modem(int portno)
 			skw_sdio->tx_req_map &= ~(1<<portno);
 			return -ETIMEDOUT;
 		}
-		val = gpio_get_value(skw_sdio->gpio_in);
+		val = gpiod_get_value(skw_sdio->gpio_in);
+		if (val < 0) {
+			skw_sdio->tx_req_map &= ~(1 << portno);
+			return val;
+		}
 	}
-	if ( val && !skw_sdio->sdio_func[FUNC_1]->irq_handler &&
-		!skw_sdio->resume_com && skw_sdio->irq_type == SKW_SDIO_INBAND_IRQ) {
+	if (!val) {
+		skw_sdio->tx_req_map &= ~(1 << portno);
+		return -ETIMEDOUT;
+	}
+	if (!skw_sdio->resume_com && skw_sdio->irq_type == SKW_SDIO_INBAND_IRQ) {
 		sdio_claim_host(skw_sdio->sdio_func[FUNC_1]);
-		ret=sdio_claim_irq(skw_sdio->sdio_func[FUNC_1],skw_sdio_inband_irq_handler);
-		ret = skw_sdio_enable_async_irq();
+		/* Another wake request may have installed the handler while we waited. */
+		ret = 0;
+		if (!skw_sdio->sdio_func[FUNC_1]->irq_handler) {
+			ret = sdio_claim_irq(skw_sdio->sdio_func[FUNC_1],
+					     skw_sdio_inband_irq_handler);
+			if (!ret)
+				ret = skw_sdio_enable_async_irq();
+		}
 		if (ret < 0)
 			skw_sdio_err("enable sdio async irq fail ret = %d\n", ret);
 		sdio_release_host(skw_sdio->sdio_func[FUNC_1]);
@@ -1881,11 +1987,26 @@ int wakeup_modem(int portno)
 	return ret;
 }
 
+
+int wakeup_modem(int portno)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __wakeup_modem(portno);
+	if (ret < 0)
+		skw_sdio->tx_req_map &= ~(1 << portno);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 void host_gpio_in_routine(int value)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	int  device_active = skw_sdio->device_active;
-	if(skw_sdio->gpio_out < 0)
+	if(skw_sdio->gpio_out == NULL)
 		return;
 
 	skw_sdio->device_active = value;
@@ -1900,7 +2021,7 @@ void host_gpio_in_routine(int value)
 	if(skw_sdio->device_active) {
 		if(skw_sdio->host_active == 0)
 			skw_sdio->host_active = 1;
-		gpio_set_value(skw_sdio->gpio_out, 1);
+		gpiod_set_value(skw_sdio->gpio_out, 1);
 		skw_sdio->resume_com = 1;
 	}
 }
@@ -1939,7 +2060,7 @@ static int setup_sdio2_packet(void *packet, u8 channel, char *msg, int size)
 	size += 8;
 	return size;
 }
-int loopcheck_send_data(char *buffer, int size)
+static int __loopcheck_send_data(char *buffer, int size)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	struct sdio_port *port;
@@ -1959,7 +2080,9 @@ int loopcheck_send_data(char *buffer, int size)
 		else{
 			count = setup_sdio2_packet(port->write_buffer, port->channel, buffer, count);
 		}
-		try_to_wakeup_modem(loop_port);
+		ret = try_to_wakeup_modem(loop_port);
+		if (ret < 0)
+			return ret;
 		if(!(ret = skw_sdio_sdma_write(port->write_buffer, count))) {
 			port->total += count;
 			port->sent_packet++;
@@ -1971,7 +2094,20 @@ int loopcheck_send_data(char *buffer, int size)
 	return -ENOMEM;
 }
 
-static int skw_sdio_suspend_send_data(int portno, char *buffer, int size)
+
+int loopcheck_send_data(char *buffer, int size)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __loopcheck_send_data(buffer, size);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+static int __skw_sdio_suspend_send_data(int portno, char *buffer, int size)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	struct sdio_port *port;
@@ -1999,7 +2135,9 @@ static int skw_sdio_suspend_send_data(int portno, char *buffer, int size)
 			count = setup_sdio2_packet(port->write_buffer, port->channel, buffer, count);
 		}
 		skw_reinit_completion(port->tx_done);
-		try_to_wakeup_modem(portno);
+		ret = try_to_wakeup_modem(portno);
+		if (ret < 0)
+			return ret;
 
 		if(skw_sdio->cp_state)
 			return -EIO;
@@ -2026,7 +2164,9 @@ static int skw_sdio_suspend_send_data(int portno, char *buffer, int size)
 		return ret;
 	} else {
 		for(i=0; i<2; i++) {
-			try_to_wakeup_modem(portno);
+			ret = try_to_wakeup_modem(portno);
+			if (ret < 0)
+				break;
 			if(!(ret = skw_sdio_sdma_write(buffer, count))) {
 				port->total += count;
 				port->sent_packet++;
@@ -2045,7 +2185,23 @@ static int skw_sdio_suspend_send_data(int portno, char *buffer, int size)
 	}
 	return -ENOMEM;
 }
-static int send_data(int portno, char *buffer, int size)
+
+
+static int skw_sdio_suspend_send_data(int portno, char *buffer, int size)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __skw_sdio_suspend_send_data(portno, buffer, size);
+	if (ret < 0 && portno >= 0 && portno < max_ch_num)
+		skw_sdio->tx_req_map &= ~(1 << portno);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+static int __send_data(int portno, char *buffer, int size)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	struct sdio_port *port;
@@ -2074,7 +2230,9 @@ static int send_data(int portno, char *buffer, int size)
 		}
 		skw_reinit_completion(port->tx_done);
 		for(i=0; i<2; i++) {
-		try_to_wakeup_modem(portno);
+		ret = try_to_wakeup_modem(portno);
+		if (ret < 0)
+			break;
 
 		if(skw_sdio->cp_state)
 			return -EIO;
@@ -2106,7 +2264,9 @@ static int send_data(int portno, char *buffer, int size)
 		return ret;
 	} else {
 		for(i=0; i<2; i++) {
-			try_to_wakeup_modem(portno);
+			ret = try_to_wakeup_modem(portno);
+			if (ret < 0)
+				break;
 			if(!(ret = skw_sdio_sdma_write(buffer, count))) {
 				port->total += count;
 				port->sent_packet++;
@@ -2125,6 +2285,48 @@ static int send_data(int portno, char *buffer, int size)
 	}
 	return -ENOMEM;
 }
+
+
+static int send_data(int portno, char *buffer, int size)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __send_data(portno, buffer, size);
+	if (ret < 0 && portno >= 0 && portno < max_ch_num)
+		skw_sdio->tx_req_map &= ~(1 << portno);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+/* Bound each sleep so shutdown can drain readers without racing reinit. */
+static int skw_sdio_wait_rx(struct sdio_port *port)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	unsigned long deadline = jiffies + msecs_to_jiffies(port->timeout);
+	unsigned long slice;
+	long ret;
+
+	for (;;) {
+		if (atomic_read(&skw_sdio->stopping))
+			return -ESHUTDOWN;
+		slice = msecs_to_jiffies(100);
+		if (port->timeout) {
+			if (time_after_eq(jiffies, deadline))
+				return 0;
+			slice = min(slice, deadline - jiffies);
+		}
+		ret = wait_for_completion_interruptible_timeout(&port->rx_done,
+							      slice);
+		if (atomic_read(&skw_sdio->stopping))
+			return -ESHUTDOWN;
+		if (ret)
+			return ret;
+	}
+}
+
 static int sdio_read(struct sdio_port *port, char *buffer, int size)
 {
 	int data_size;
@@ -2144,6 +2346,8 @@ static int sdio_read(struct sdio_port *port, char *buffer, int size)
 		}
 	}
 try_again0:
+	if (atomic_read(&skw_sdio->stopping))
+		return -ESHUTDOWN;
 	skw_reinit_completion(port->rx_done);
 	if(port->rx_wp == port->rx_rp) {
 
@@ -2152,17 +2356,9 @@ try_again0:
 			skw_sdio_err("the log port or at port ---%d --%d\n", port->channel, skw_log_port());
 			return -EIO;
 		}
-		if (port->timeout==0) {
-			ret = wait_for_completion_interruptible(&port->rx_done);
-			if(ret)
-				return ret;
-		} else{
-			ret = wait_for_completion_interruptible_timeout(&port->rx_done,msecs_to_jiffies(port->timeout));
-			if(ret==0) {
-                               skw_sdio_info(" read timeout=%d\n", port->timeout);
-                               return ret;
-			}
-		}
+		ret = skw_sdio_wait_rx(port);
+		if (ret <= 0)
+			return ret;
 		if(port->state == PORT_STATE_CLSE) {
 			port->state = PORT_STATE_IDLE;
 			return -EAGAIN;
@@ -2218,7 +2414,7 @@ try_again0:
 	return size;
 }
 
-int recv_data(int portno, char *buffer, int size)
+static int __recv_data(int portno, char *buffer, int size)
 {
 	struct sdio_port *port;
 	int ret;
@@ -2237,7 +2433,20 @@ int recv_data(int portno, char *buffer, int size)
 	return ret;
 }
 
-int recv_data_timeout(int portno, char *buffer, int size, int *actual, int timeout)
+
+int recv_data(int portno, char *buffer, int size)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __recv_data(portno, buffer, size);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+static int __recv_data_timeout(int portno, char *buffer, int size, int *actual, int timeout)
 {
        struct sdio_port *port;
        int ret;
@@ -2258,6 +2467,19 @@ int recv_data_timeout(int portno, char *buffer, int size, int *actual, int timeo
        return ret;
 }
 
+
+int recv_data_timeout(int portno, char *buffer, int size, int *actual, int timeout)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __recv_data_timeout(portno, buffer, size, actual, timeout);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 int send_data_timeout(int portno, char *buffer, int size, int *actual, int timeout)
 {
        struct sdio_port *port;
@@ -2277,7 +2499,7 @@ int send_data_timeout(int portno, char *buffer, int size, int *actual, int timeo
        return ret;
 }
 
-int skw_sdio_suspend_adma_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
+static int __skw_sdio_suspend_adma_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
 {
 	struct sdio_port *port;
 	int ret, i;
@@ -2295,10 +2517,12 @@ int skw_sdio_suspend_adma_cmd(int portno, struct scatterlist *sg, int sg_num, in
 	data = (u32 *)sg_virt(sg);
 	irq_state = skw_sdio_irq_ops(0);
 	for(i=0; i<2; i++) {
-		try_to_wakeup_modem(portno);
+		ret = try_to_wakeup_modem(portno);
+		if (ret < 0)
+			break;
 		ret = skw_sdio_adma_write(portno, sg, sg_num, total);
-		if(skw_sdio->gpio_in >=0)
-			skw_sdio_info("timeout gpioin value=%d \n",gpio_get_value(skw_sdio->gpio_in));
+		if(skw_sdio->gpio_in != NULL)
+			skw_sdio_info("timeout gpioin value=%d \n",gpiod_get_value(skw_sdio->gpio_in));
 		if(!ret){
 			break;
 		}
@@ -2306,22 +2530,41 @@ int skw_sdio_suspend_adma_cmd(int portno, struct scatterlist *sg, int sg_num, in
 	if(!irq_state){
 		skw_sdio_irq_ops(1);
 	}
+	if (ret) {
+		skw_sdio->tx_req_map &= ~(1 << portno);
+		return ret;
+	}
 	skw_sdio->tx_req_map &= ~(1<<portno);
 	skw_port_log(portno,"%s port%d sg_num=%d total=%d 0x%x 0x%x\n",
 			__func__, portno, sg_num, total, data[0], data[1]);
 	if(portno == WIFI_CMD_PORT) {
 		memcpy(debug_infos.last_sent_wifi_cmd, data, 12);
 		debug_infos.last_sent_time = jiffies;
-		if (skw_sdio->gpio_in >=0 && !gpio_get_value(skw_sdio->gpio_in)) {
+		if (skw_sdio->gpio_in != NULL && !gpiod_get_value(skw_sdio->gpio_in)) {
 			skw_sdio_info("modem is sleep and wakeup it\n");
 			try_to_wakeup_modem(portno);
 		}
 	}
 	port->total += total;
 	port->sent_packet += sg_num;
+	/* The post-send wake request must not leave a stale pending TX bit. */
+	skw_sdio->tx_req_map &= ~(1 << portno);
 	return ret;
 }
 
+
+int skw_sdio_suspend_adma_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __skw_sdio_suspend_adma_cmd(portno, sg, sg_num, total);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 static int skw_sdio_irq_ops(int irq_enable)
 {
 	int ret =-1;
@@ -2330,11 +2573,11 @@ static int skw_sdio_irq_ops(int irq_enable)
 	ktime_t cur_time,last_time;
 #endif
 	//struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
-	if(skw_sdio->gpio_in < 0 ) {
-		skw_sdio_warn("gpio_in < 0 no need the cls the irq ops !!\n");
+	if(skw_sdio->gpio_in == NULL || skw_sdio->irq_num < 0) {
+		skw_sdio_warn("host-wake GPIO absent; skipping IRQ cleanup\n");
 		return ret;
 	}
-	skw_sdio_info("gpio_in num %d the value %d !!\n",skw_sdio->gpio_in,gpio_get_value(skw_sdio->gpio_in));
+	skw_sdio_info("gpio_in descriptor %p the value %d !!\n",skw_sdio->gpio_in,gpiod_get_value(skw_sdio->gpio_in));
 	if(irq_enable){
 		skw_sdio_info("enable irq\n");
 		skw_sdio->suspend_wake_unlock_enable = 1;
@@ -2345,9 +2588,9 @@ static int skw_sdio_irq_ops(int irq_enable)
 		//skw_sdio_info("line %d start time %llu and the over time %llu ,the usertime=%llu \n",__LINE__,
 		//cur_time, last_time,(last_time-cur_time));
 	}else{
-		if (gpio_get_value(skw_sdio->gpio_in) == 0) {
+		if (gpiod_get_value(skw_sdio->gpio_in) == 0) {
 			udelay(10);
-			if (gpio_get_value(skw_sdio->gpio_in) == 0) {
+			if (gpiod_get_value(skw_sdio->gpio_in) == 0) {
 				disable_irq(skw_sdio->irq_num);
 				ret=0;
 #if 0//def CONFIG_SKW_DL_TIME_STATS
@@ -2355,7 +2598,7 @@ static int skw_sdio_irq_ops(int irq_enable)
 #endif
 				skw_sdio_info("disable irq\n");
 			}else{
-				skw_sdio_info("NO disable irq cp wake !the value %d !!\n",gpio_get_value(skw_sdio->gpio_in));
+				skw_sdio_info("NO disable irq cp wake !the value %d !!\n",gpiod_get_value(skw_sdio->gpio_in));
 				ret = -2;
 			}
 		}
@@ -2366,7 +2609,7 @@ static int skw_sdio_irq_ops(int irq_enable)
 	return ret;
 };
 
-int wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
+static int __wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
 {
 	struct sdio_port *port;
 	int ret, i;
@@ -2382,15 +2625,19 @@ int wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
 		return -EIO;
 	data = (u32 *)sg_virt(sg);
 	for(i=0; i<5; i++) {
-		try_to_wakeup_modem(portno);
+		ret = try_to_wakeup_modem(portno);
+		if (ret < 0)
+			break;
 		ret = skw_sdio_adma_write(portno, sg, sg_num, total);
 		if(!ret)
 			break;
-		if (skw_sdio->gpio_in >= 0) {
-			skw_sdio_info("timeout gpioin value=%d \n",gpio_get_value(skw_sdio->gpio_in));
+		if (skw_sdio->gpio_in != NULL) {
+			skw_sdio_info("timeout gpioin value=%d \n",gpiod_get_value(skw_sdio->gpio_in));
 		}
 	}
 	skw_sdio->tx_req_map &= ~(1<<portno);
+	if (ret)
+		return ret;
 	if (portno == WIFI_CMD_PORT ||
 	   (skw_cp_ver == SKW_SDIO_V20 && portno ==  WIFI_DATA_PORT)) {
 		skw_port_log(portno, "%s port%d sg_num=%d total=%d 0x%x 0x%x 0x%x 0x%x\n",
@@ -2402,7 +2649,21 @@ int wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
 	port->sent_packet += sg_num;
 	return ret;
 }
-static int register_rx_callback(int id, void *func, void *para)
+
+
+int wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __wifi_send_cmd(portno, sg, sg_num, total);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+static int __register_rx_callback(int id, void *func, void *para)
 {
 	struct sdio_port *port;
 
@@ -2428,6 +2689,20 @@ static int register_rx_callback(int id, void *func, void *para)
 
 	return 0;
 }
+
+
+static int register_rx_callback(int id, void *func, void *para)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return func ? ret : 0;
+	ret = __register_rx_callback(id, func, para);
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 /***************************************************************************
  *Description:
  *Seekwave tech LTD
@@ -2435,7 +2710,7 @@ static int register_rx_callback(int id, void *func, void *para)
  *Date:
  *Modify:
  **************************************************************************/
-static int bt_service_start(void)
+static int __bt_service_start(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
@@ -2468,6 +2743,19 @@ static int bt_service_start(void)
 	return ret;
 }
 
+
+static int bt_service_start(void)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __bt_service_start();
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 /***************************************************************************
  *Description:
  *Seekwave tech LTD
@@ -2475,7 +2763,7 @@ static int bt_service_start(void)
  *Date:
  *Modify:
  **************************************************************************/
-static int bt_service_stop(void)
+static int __bt_service_stop(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
@@ -2490,6 +2778,19 @@ static int bt_service_stop(void)
 }
 
 
+static int bt_service_stop(void)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return 0;
+	ret = __bt_service_stop();
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
+
 /***************************************************************************
  *Description:
  *Seekwave tech LTD
@@ -2497,7 +2798,7 @@ static int bt_service_stop(void)
  *Date:
  *Modify:
  **************************************************************************/
-static int wifi_service_start(void)
+static int __wifi_service_start(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
@@ -2544,6 +2845,19 @@ static int wifi_service_start(void)
 	return ret;
 }
 
+
+static int wifi_service_start(void)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __wifi_service_start();
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 /***************************************************************************
  *Description:
  *Seekwave tech LTD
@@ -2551,7 +2865,7 @@ static int wifi_service_start(void)
  *Date:
  *Modify:
  **************************************************************************/
-static int wifi_service_stop(void)
+static int __wifi_service_stop(void)
 {
 	int ret =0;
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
@@ -2568,6 +2882,19 @@ static int wifi_service_stop(void)
 	return ret;
 }
 
+
+static int wifi_service_stop(void)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return 0;
+	ret = __wifi_service_stop();
+	skw_sdio_io_put(skw_sdio);
+	return ret;
+}
 static int wifi_get_credit(void)
 {
 	char val;
@@ -2587,22 +2914,39 @@ static int wifi_store_credit_to_cp(unsigned char val)
 	return err;
 }
 
-void kick_rx_thread(void)
+static void __kick_rx_thread(void)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int value;
 
+	if (atomic_read(&skw_sdio->stopping))
+		return;
 	debug_infos.cmd_timeout_cnt++;
 	is_timeout_kick = 1;
-	if(skw_sdio->gpio_out < 0) {
+	if (!skw_sdio->gpio_out || !skw_sdio->gpio_in) {
 		skw_sdio_rx_up(skw_sdio);
 	} else {
-		skw_sdio->device_active = gpio_get_value(skw_sdio->gpio_in);
+		value = gpiod_get_value(skw_sdio->gpio_in);
+		if (value < 0)
+			return;
+		skw_sdio->device_active = value;
 		if(skw_sdio->device_active) {
 			skw_sdio_rx_up(skw_sdio);
 		} else {
 			try_to_wakeup_modem(LOOPCHECK_PORT);
 		}
 	}
+}
+
+
+void kick_rx_thread(void)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+
+	if (skw_sdio_io_get(skw_sdio))
+		return;
+	__kick_rx_thread();
+	skw_sdio_io_put(skw_sdio);
 }
 /************************************************************************
  *Decription:bluetooth log enable
@@ -2892,8 +3236,8 @@ static int skw_sdio_gpio_check(struct skw_sdio_data_t *skw_sdio)
 	if(!skw_sdio)
 		return ret;
 
-	if ((SKW_SDIO_INBAND_IRQ == skw_sdio->irq_type) && (skw_sdio->gpio_in>=0 && skw_sdio->gpio_out>=0)) {
-			skw_sdio_err("Please use SKW_SDIO_EXTERNAL_IRQ! irq_type=%d gpio_in=%d gpio_out=%d\n", skw_sdio->irq_type, skw_sdio->gpio_in,skw_sdio->gpio_out);
+	if ((SKW_SDIO_INBAND_IRQ == skw_sdio->irq_type) && (skw_sdio->gpio_in != NULL && skw_sdio->gpio_out != NULL)) {
+			skw_sdio_err("Please use SKW_SDIO_EXTERNAL_IRQ! irq_type=%d gpio_in=%p gpio_out=%p\n", skw_sdio->irq_type, skw_sdio->gpio_in,skw_sdio->gpio_out);
 			return ret;
 	}
 	return 0;
@@ -3016,7 +3360,7 @@ int skw_sdio_wifi_status(void)
 		return 0;
 	return 1;
 }
-int skw_sdio_wifi_power_on(int power_on)
+static int __skw_sdio_wifi_power_on(int power_on)
 {
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	int ret;
@@ -3028,6 +3372,20 @@ int skw_sdio_wifi_power_on(int power_on)
 	} else {
 		ret = skw_sdio_unbind_WIFI_driver(skw_sdio->sdio_func[FUNC_1]);
 	}
+	return ret;
+}
+
+
+int skw_sdio_wifi_power_on(int power_on)
+{
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	int ret;
+
+	ret = skw_sdio_io_get(skw_sdio);
+	if (ret)
+		return ret;
+	ret = __skw_sdio_wifi_power_on(power_on);
+	skw_sdio_io_put(skw_sdio);
 	return ret;
 }
 #ifdef CONFIG_BT_SEEKWAVE
@@ -3376,14 +3734,15 @@ static int skw_sdio_unbind_sdio_port_driver(struct sdio_func *func, int portno)
 				      portno);
 	}
 	port->pdev = NULL;
+	/* Child remove callbacks must finish before their buffers are released. */
+	if (pdev)
+		platform_device_unregister(pdev);
 	if (port->read_buffer)
 		kfree(port->read_buffer);
 	if (port->write_buffer)
 		kfree(port->write_buffer);
 	if (port->sg_rx)
 		kfree(port->sg_rx);
-	if (pdev)
-		platform_device_unregister(pdev);
 	port->sg_rx = NULL;
 	port->read_buffer = NULL;
 	port->write_buffer = NULL;

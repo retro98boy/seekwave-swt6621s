@@ -19,6 +19,8 @@
 #include <linux/slab.h>
 #include <linux/version.h>
 #include <linux/atomic.h>
+#include <linux/spinlock.h>
+#include <linux/wait.h>
 #include "../skwutil/skw_boot.h"
 #include "skw_sdio_log.h"
 #define skwsdio_log(fmt, args...) \
@@ -152,15 +154,20 @@ struct skw_sdio_data_t {
 	atomic_t resume_flag;
 	atomic_t online;
 	atomic_t threads_exit;
+	atomic_t stopping;
+	spinlock_t io_lock;
+	unsigned int io_users;
+	wait_queue_head_t io_idle;
+	bool quiesced;
 	bool adma_rx_enable;
 	bool pwrseq;
 	bool blk_size;
 	/* EXTERNAL_IRQ 0, INBAND_IRQ 1. */
 	unsigned char irq_type;
 	atomic_t suspending;
-	int gpio_out;
-	int gpio_in;
-	unsigned int irq_num;
+	struct gpio_desc *gpio_out;
+	struct gpio_desc *gpio_in;
+	int irq_num;
 	unsigned int irq_trigger_type;
 	struct sdio_func *sdio_func[MAX_FUNC_NUM];
 	struct mmc_host *sdio_dev_host;
@@ -180,7 +187,7 @@ struct skw_sdio_data_t {
 	char tx_req_map;
 	int resume_com;
 	int cp_state;
-	int chip_en;
+	struct gpio_desc *chip_en;
 	unsigned int chip_id[SKW_CHIP_ID_LENGTH];
 	unsigned int  cp_sdio_register0[4];
 	unsigned int  cp_sdio_register1[16];
@@ -296,6 +303,8 @@ int skw_boot_loader(struct seekwave_device *boot_data);
 void send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio);
 void send_host_resume_indication(struct skw_sdio_data_t *skw_sdio);
 int try_to_wakeup_modem(int portno);
+int skw_sdio_io_get(struct skw_sdio_data_t *skw_sdio);
+void skw_sdio_io_put(struct skw_sdio_data_t *skw_sdio);
 int wakeup_modem(int portno);
 void host_gpio_in_routine(int value);
 void skw_sdio_inband_irq_handler(struct sdio_func *func);

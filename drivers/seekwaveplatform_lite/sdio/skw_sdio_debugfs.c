@@ -107,6 +107,7 @@ void skw_sdio_proc_deinit(void)
 	if (!skw_sdio_proc_root)
 		return;
 	proc_remove(skw_sdio_proc_root);
+	skw_sdio_proc_root = NULL;
 }
 
 int skw_sdio_debugfs_init(void)
