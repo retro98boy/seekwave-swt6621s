@@ -779,13 +779,14 @@ static int skw_set_android_suspend(struct wiphy *wiphy, struct net_device *dev,
 {
 	int ret = 0;
 	long val = 0;
-	char *endp = NULL;
 
 	skw_dev_dbg(dev, "data: %s\n", suspend);
 
-	val = simple_strtol(suspend, &endp, 0);
-	if (*endp != '\0' || (val != 0 && val != 1)) {
-		skw_dev_err(dev, "endp: %d, val: %ld\n", *endp, val);
+	ret = kstrtol(suspend, 0, &val);
+	if (ret)
+		return ret;
+	if (val != 0 && val != 1) {
+		skw_dev_err(dev, "invalid suspend value: %ld\n", val);
 
 		return -EINVAL;
 	}

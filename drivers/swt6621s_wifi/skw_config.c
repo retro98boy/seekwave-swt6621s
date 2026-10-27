@@ -23,11 +23,11 @@ static struct skwifi_cfg *skw_cfg_match(struct skwifi_cfg *table, char *name)
 
 static long skw_bool_flag(unsigned long *flags, int nr, char *value)
 {
-	char *endp;
-	long val = simple_strtol(value, &endp, 0);
+	long val;
+	int ret = kstrtol(value, 0, &val);
 
-	if (*endp != '\0')
-		return -EINVAL;
+	if (ret)
+		return ret;
 
 	switch (val) {
 	case 0:
@@ -47,9 +47,9 @@ static long skw_bool_flag(unsigned long *flags, int nr, char *value)
 
 static void skw_get_mac_addr(char *buff, char *mac)
 {
-	long val;
+	u8 val;
 	int i, j, idx;
-	char chr, *endp;
+	char chr;
 	char dat[8], addr[6] = {0};
 	int len = strlen(buff);
 
@@ -59,14 +59,13 @@ static void skw_get_mac_addr(char *buff, char *mac)
 			chr = '\0';
 
 		if (j >= sizeof(dat))
-			break;
+			return;
 
 		dat[j++] = chr;
 
 		if (chr == '\0') {
-			val = simple_strtol(dat, &endp, 16);
-			if (val > 0xff)
-				break;
+			if (idx >= ETH_ALEN || kstrtou8(dat, 16, &val))
+				return;
 
 			j = 0;
 			addr[idx++] = val;
@@ -258,16 +257,15 @@ static void skw_parser(struct skwifi_cfg *table, const u8 *data, int size)
 
 static int skw_global_parser(struct skwifi_cfg *config, char *key, char *value)
 {
-	char *endp;
 	struct skw_cfg_global *cfg = config->priv;
 
 	if (!strcmp(key, "mac_addr")) {
 		skw_get_mac_addr(value, cfg->mac);
 		skw_detail("mac addr: %pM\n", cfg->mac);
 	} else if (!strcmp(key, "dma_addr_align")) {
-		cfg->dma_addr_align = simple_strtol(value, &endp, 0);
+		return kstrtou8(value, 0, &cfg->dma_addr_align);
 	} else if (!strcmp(key, "reorder_timeout")) {
-		cfg->reorder_timeout = simple_strtol(value, &endp, 0);
+		return kstrtou8(value, 0, &cfg->reorder_timeout);
 	} else {
 		skw_dbg("unsupport key: %s\n", key);
 	}
@@ -277,11 +275,13 @@ static int skw_global_parser(struct skwifi_cfg *config, char *key, char *value)
 
 static int skw_firmware_parser(struct skwifi_cfg *config, char *key, char *value)
 {
-	char *endp;
+	int ret;
 	struct skw_cfg_firmware *fw = config->priv;
 
 	if (!strcmp(key, "beacon_timeout")) {
-		fw->beacon_timeout = simple_strtol(value, &endp, 0);
+		ret = kstrtou8(value, 0, &fw->beacon_timeout);
+		if (ret)
+			return ret;
 		skw_detail("beacon timeout: %d\n", fw->beacon_timeout);
 	} else if (!strcmp(key, "cca_enable")) {
 		skw_bool_flag(&fw->flags, SKW_CFG_FIRMWARE_CCA_ENABLE, value);
@@ -299,7 +299,7 @@ static int skw_config_intf(struct skw_cfg_intf *intf, char *value)
 	bool exit = false;
 	bool clear_mode = false;
 	int idx = 0, inst = 0, len;
-	char *endp, *pos = value;
+	char *pos = value;
 	char *chr, buff[SKW_LINE_BUFF_LEN];
 	struct skw_cfg_interface *ifa = NULL;
 	unsigned long flags = 0;
@@ -368,8 +368,8 @@ static int skw_config_intf(struct skw_cfg_intf *intf, char *value)
 			break;
 
 		case 2:
-			inst = simple_strtol(buff, &endp, 0);
-			if (*endp != 0 || inst < 0 || inst >= SKW_NR_IFACE) {
+			if (kstrtoint(buff, 0, &inst) ||
+			    inst < 0 || inst >= SKW_NR_IFACE) {
 				exit = true;
 				clear_bit(idx, &flags);
 			}
@@ -477,7 +477,9 @@ static int skw_band_parser(struct skwifi_cfg *config, char *key, char *value)
 
 static int skw_mib_parser(struct skwifi_cfg *config, char *key, char *value)
 {
-	long id, val;
+	u16 id;
+	long val;
+	int ret;
 	struct list_head *head = NULL;
 	char *at = NULL, *endp = NULL;
 	struct skw_mib_data *md = NULL;
@@ -488,11 +490,11 @@ static int skw_mib_parser(struct skwifi_cfg *config, char *key, char *value)
 	if (!at)
 		return -EINVAL;
 
-	id = simple_strtol(at + 1, &endp, 0);
-	if (*endp != '\0')
-		return -EINVAL;
+	ret = kstrtou16(at + 1, 0, &id);
+	if (ret)
+		return ret;
 
-#define SKW_IS_START_WITH(s, ref) (!memcmp(s, ref, strlen(ref)))
+#define SKW_IS_START_WITH(s, ref) (!strncmp(s, ref, strlen(ref)))
 	if (SKW_IS_START_WITH(key, "init@"))
 		head = &mib->init;
 	else if (SKW_IS_START_WITH(key, "sta@"))
@@ -526,18 +528,20 @@ static int skw_mib_parser(struct skwifi_cfg *config, char *key, char *value)
 
 		type = SKW_TYPE_STRING;
 	} else {
-		val = simple_strtol(value, &endp, 0);
-		if (*endp != '/')
-			return -EINVAL;
+		*endp = '\0';
+		ret = kstrtol(value, 0, &val);
+		*endp = '/';
+		if (ret)
+			return ret;
 
 		if (SKW_IS_STRING(endp + 1, "s8")) {
-			if (val >= -127 && val <= 128)
+			if (val >= -128 && val <= 127)
 				type = SKW_TYPE_S8;
 		} else if (SKW_IS_STRING(endp + 1, "s16")) {
-			if (val >= -32767 && val <= 32768)
+			if (val >= -32768 && val <= 32767)
 				type = SKW_TYPE_S16;
 		} else if (SKW_IS_STRING(endp + 1, "s32")) {
-			if (val >= -2147483647 && val <= 2147483648)
+			if (val >= (-2147483647L - 1) && val <= 2147483647L)
 				type = SKW_TYPE_S32;
 		} else if (SKW_IS_STRING(endp + 1, "u8")) {
 			if (val >= 0 && val <= 0xff)

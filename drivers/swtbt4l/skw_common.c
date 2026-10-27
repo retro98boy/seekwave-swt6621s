@@ -306,7 +306,7 @@ EXPORT_SYMBOL_GPL(skw_char2hex);
 char *skwbt_config_get_uint8(char *data_str, uint8_t *value)
 {
     char *split0 = skw_strchr(data_str, ';');
-    uint8_t len = 0;
+    size_t len = 0;
     char buffer[8] = {0};
     if((split0 == NULL) || (split0 == data_str))
     {
@@ -319,7 +319,8 @@ char *skwbt_config_get_uint8(char *data_str, uint8_t *value)
         return NULL;
     }
     memcpy(buffer, data_str, len);
-    *value = (int)simple_strtol(buffer, NULL, 10);
+    if (kstrtou8(buffer, 10, value))
+        return NULL;
     return split0 + 1;//skip ;
 }
 
@@ -411,4 +412,3 @@ void skw_parse_wakeup_adv_conf(char *data_str, Wakeup_ADV_Info_St *wakeup_adv_in
 }
 
 EXPORT_SYMBOL_GPL(skw_parse_wakeup_adv_conf);
-
