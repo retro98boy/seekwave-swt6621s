@@ -766,14 +766,19 @@ static int skw_change_intf(struct wiphy *wiphy, struct net_device *dev,
 
 	ret = skw_iface_setup(wiphy, dev, iface, mac, type, iface->id);
 	if (ret) {
+		int err = ret;
+
 		skw_dev_err(dev, "open dev failed, %s (inst: %d)\n",
 			skw_iftype_name(type), iface->id);
 
-			ret = skw_iface_setup(wiphy, dev, iface, iface->addr,
-				iface->wdev.iftype, iface->id);
-			if (ret)
-				skw_err("open dev failed, %s (inst: %d)\n",
-					skw_iftype_name(iface->wdev.iftype), iface->id);
+		ret = skw_iface_setup(wiphy, dev, iface, iface->addr,
+				    iface->wdev.iftype, iface->id);
+		if (ret)
+			skw_err("open dev failed, %s (inst: %d)\n",
+				skw_iftype_name(iface->wdev.iftype), iface->id);
+		else
+			/* Restoring the old type does not complete the requested change. */
+			ret = err;
 	}
 
 out:

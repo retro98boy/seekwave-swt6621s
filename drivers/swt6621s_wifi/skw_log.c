@@ -166,7 +166,8 @@ static void skw_add_dbg_iface(void)
 	skw_ether_copy(ndev->dev_addr, mac);
 #endif
 	rtnl_lock();
-	ret = skw_register_netdevice(ndev);
+	/* This debug netdev has no wireless_dev and is not managed by cfg80211. */
+	ret = register_netdevice(ndev);
 	rtnl_unlock();
 	if (ret) {
 		skw_err("register netdev failed\n");
@@ -199,8 +200,9 @@ void skw_del_dbg_iface(void)
 	mutex_unlock(&skw_dbg_mutex);
 
 	rtnl_lock();
-	skw_unregister_netdevice(iface->ndev);
+	unregister_netdevice(iface->ndev);
 	rtnl_unlock();
+	free_netdev(iface->ndev);
 }
 
 static void skw_set_dump_frame(bool enable)
