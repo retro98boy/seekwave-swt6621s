@@ -35,6 +35,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
+      - name: Trust mounted workspace
+        # checkout uses a temporary global Git config; shell steps need their own entry.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Validate release tag
         if: github.ref_type == 'tag'
         shell: bash
