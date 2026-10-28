@@ -15,7 +15,7 @@ override_dh_auto_install:
 	dh_install -X.nvbin Makefile drivers include usr/src/swt6621s-$(DEB_VERSION_UPSTREAM)
 
 override_dh_dkms:
-	dh_dkms -- dkms.conf
+	dh_dkms -V $(DEB_VERSION_UPSTREAM) -- dkms.conf
 
 # Keep binary packages readable by older Debian and Ubuntu dpkg versions.
 override_dh_builddeb:

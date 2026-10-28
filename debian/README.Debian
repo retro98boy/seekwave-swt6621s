@@ -17,13 +17,18 @@ are required. The architecture-independent package contains source only.
 
 Build on Debian/Ubuntu (older releases provide dh_dkms in dkms):
 
-  sudo apt-get install debhelper dkms build-essential
+  sudo apt-get install git debhelper dkms build-essential
   # On releases with a separate dh-dkms package, install it as well.
-  dpkg-buildpackage -us -uc -b
+  bash scripts/build-deb.sh
+
+Commit or stash local changes first: the script packages the committed HEAD,
+not uncommitted files. It exports that commit into a temporary directory and
+leaves the checkout unchanged. Packages are written to dist/ by default; an
+optional argument selects another output directory.
 
 Install:
 
-  sudo apt install ./swt6621s-dkms_2026.10.27+git15a66f7_all.deb
+  sudo apt install ./dist/swt6621s-dkms_*_all.deb
   dkms status
 
 Kernel image and header package hooks invoke DKMS automatically. Reinstalling
@@ -33,6 +38,43 @@ version requires a new build. Do not remove a running kernel to test this.
 The package does not forcibly unload a running driver during installation.
 Reboot or reload the three modules to use the newly built modules.
 
-Package versions identify the source snapshot date and Git revision rather
-than inventing an upstream release number. Debian packaging-only revisions
-can use a trailing .1, .2, etc. in this native package version.
+Snapshot versions use the checked-out commit's UTC committer timestamp and
+the first 12 characters of its ID: YYYY.MM.DD.HHMMSS+gitCOMMIT. Using the
+commit time rather than the build time keeps the version stable across
+rebuilds. Seconds distinguish successive commits on the same day; the hash
+identifies the exact source. Backdated commits, or commits with identical
+timestamps, do not guarantee increasing Debian version ordering.
+
+The version is generated after the commit exists; it never needs to be
+embedded into that same commit. dh_dkms substitutes #MODULE_VERSION# in
+dkms.conf with the package version. The generated /usr/src/swt6621s-VERSION
+directory and DKMS registration therefore use the same version as the deb.
+The unprocessed dkms.conf is a packaging template; build the deb before
+installing with DKMS. Direct dpkg-buildpackage builds remain available and
+use the release version recorded in debian/changelog.
+
+GitHub Actions runs the same script on pushes, pull requests and manual
+dispatches. Push/manual builds use the selected source commit; pull request
+builds explicitly check out the PR head rather than the temporary merge
+commit. Download the deb and checksums from the workflow's artifact. The
+workflow builds an architecture-independent source package on Debian 12;
+it does not compile the modules for each supported kernel or test hardware.
+
+Tags and package versions use exactly the same name, without a v prefix.
+After committing and testing the source, create and push a tag manually:
+
+  version=$(bash scripts/version.sh)
+  git tag -a "$version" -m "Release $version"
+  git push origin "refs/tags/$version"
+
+To select another tested commit, pass it to scripts/version.sh and use that
+same commit as the final argument to git tag. Annotated and lightweight
+tags both resolve to the source commit for version generation.
+
+CI never creates or pushes tags. Ordinary branch pushes, pull requests and
+manual builds only upload Actions artifacts. Pushing a tag whose name
+matches the source version additionally creates a draft GitHub Release
+with the deb and SHA256SUMS attached. Review it and publish it manually.
+The release command uses --verify-tag, so a missing tag cannot be created
+implicitly. Other tag names do not produce a release; numeric tag names
+that do not match the source version fail validation.

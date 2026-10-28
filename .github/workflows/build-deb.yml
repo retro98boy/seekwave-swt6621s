@@ -1,0 +1,88 @@
+name: Build DKMS package
+
+on:
+  push:
+    branches: ['**']
+    tags: ['[0-9]*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: debian:bookworm-slim
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git build-essential debhelper dkms dh-dkms
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Package the PR source commit instead of GitHub's temporary merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Validate release tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version=$(bash scripts/version.sh)
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            printf 'Tag must match the source version: %s\n' "$version" >&2
+            exit 1
+          fi
+
+      - name: Build Debian package
+        id: package
+        shell: bash
+        run: |
+          bash scripts/build-deb.sh
+          version=$(dpkg-deb -f dist/*.deb Version)
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: swt6621s-dkms-${{ steps.package.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Download package
+        run: |
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "swt6621s-dkms-$RELEASE_VERSION" --dir dist
+
+      - name: Create draft release for existing tag
+        run: |
+          test "$GITHUB_REF_NAME" = "$RELEASE_VERSION"
+          (cd dist && sha256sum -c SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/swt6621s-dkms_${RELEASE_VERSION}_all.deb" dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+            --title "$GITHUB_REF_NAME" --generate-notes
