@@ -70,6 +70,10 @@ char *swt6621s_firmware_dir = "";
 module_param_named(firmware_dir, swt6621s_firmware_dir, charp, 0644);
 MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
 
+static uint skw_txba_stale_sec = 10;
+module_param_named(txba_stale_sec, skw_txba_stale_sec, uint, 0644);
+MODULE_PARM_DESC(txba_stale_sec, "Seconds a TX BA session may go unconfirmed before the driver checks it still exists. 0 disables the check.");
+
 char swt6621s_board_id[64] = "";
 
 int swt6621s_request_firmware(const struct firmware **fw, const char *name,
@@ -212,8 +216,26 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
 		return;
 	}
 
-	if (peer->txba.bitmap & BIT(tid))
+	if (peer->txba.bitmap & BIT(tid)) {
+		/* A live session is renegotiated every few seconds; one claimed
+		 * for much longer may have been dropped without a DEL_TX_BA.
+		 */
+		if (skw_txba_stale_sec &&
+		    time_after(jiffies, peer->txba.stale[tid])) {
+			peer->txba.stale[tid] = jiffies +
+					(unsigned long)skw_txba_stale_sec * HZ;
+
+			tx_ba.tid = tid;
+			tx_ba.lmac_id = iface->lmac_id;
+			tx_ba.peer_idx = peer->idx;
+
+			skw_queue_work(priv_to_wiphy(skw), iface,
+				       SKW_WORK_TXBA_PROBE,
+				       &tx_ba, sizeof(tx_ba));
+		}
+
 		return;
+	}
 
 	if (peer->txba.blacklist & BIT(tid)) {
 		if (time_after(jiffies, peer->txba.tx_timeout[tid])) {
@@ -233,8 +255,11 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
 
 	ret = skw_queue_work(priv_to_wiphy(skw), iface, SKW_WORK_SETUP_TXBA,
 				&tx_ba, sizeof(tx_ba));
-	if (!ret)
+	if (!ret) {
 		peer->txba.bitmap |= BIT(tid);
+		peer->txba.stale[tid] = jiffies +
+					(unsigned long)skw_txba_stale_sec * HZ;
+	}
 }
 
 struct skw_ctx_entry *skw_get_ctx_entry(struct skw_core *skw, const u8 *addr)

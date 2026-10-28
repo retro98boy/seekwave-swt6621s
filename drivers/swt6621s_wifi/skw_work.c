@@ -199,6 +199,43 @@ static int skw_work_process(struct wiphy *wiphy, struct skw_iface *iface,
 
 		break;
 
+	case SKW_WORK_TXBA_PROBE: {
+		struct skw_peer_ctx *ctx;
+		u8 addr[ETH_ALEN];
+		bool known = false;
+
+		ba = data;
+		ctx = skw_get_ctx(skw, ba->lmac_id, ba->peer_idx);
+		if (!ctx)
+			break;
+
+		rcu_read_lock();
+		if (rcu_dereference(ctx->entry)) {
+			ether_addr_copy(addr, rcu_dereference(ctx->entry)->addr);
+			known = true;
+		}
+		rcu_read_unlock();
+
+		if (!known || skw_peer_refresh_rate(wiphy, iface->ndev, addr))
+			break;
+
+		skw_peer_ctx_lock(ctx);
+
+		/* Downlink still running HE while uplink has fallen back to a
+		 * legacy rate means the claimed BA session is gone.
+		 */
+		if (ctx->peer && (ctx->peer->txba.bitmap & BIT(ba->tid)) &&
+		    ctx->peer->tx.rate.flags == SKW_RATE_INFO_FLAGS_LEGACY &&
+		    ctx->peer->rx.rate.flags != SKW_RATE_INFO_FLAGS_LEGACY) {
+			skw_warn("stale TXBA, tid: %d, renegotiating\n", ba->tid);
+			SKW_CLEAR(ctx->peer->txba.bitmap, BIT(ba->tid));
+		}
+
+		skw_peer_ctx_unlock(ctx);
+
+		break;
+	}
+
 	case SKW_WORK_SETUP_TXBA:
 		ba = data;
 
