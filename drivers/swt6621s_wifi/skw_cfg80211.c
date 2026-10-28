@@ -1613,7 +1613,7 @@ static int skw_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
 	iface->sap.cfg.vht_cap = SKW_KMEMDUP(settings->vht_cap,
 				sizeof(*settings->vht_cap), GFP_KERNEL);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	iface->sap.ht_required = settings->beacon.ht_required;
 	iface->sap.vht_required = settings->beacon.vht_required;
 #else
@@ -4012,7 +4012,7 @@ static inline bool is_skw_rrm_report(const void *buf, int buf_len)
 	if (!ieee80211_is_action(mgmt->frame_control))
 		return false;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 	if (buf_len < IEEE80211_MIN_ACTION_SIZE(measurement))
 #else
 	if (buf_len < IEEE80211_MIN_ACTION_SIZE +
@@ -4023,7 +4023,7 @@ static inline bool is_skw_rrm_report(const void *buf, int buf_len)
 	if (mgmt->u.action.category != SKW_WLAN_CATEGORY_RADIO_MEASUREMENT)
 		return false;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 	if (mgmt->u.action.action_code != WLAN_ACTION_SPCT_MSR_RPRT)
 #else
 	if (mgmt->u.action.u.measurement.action_code != WLAN_ACTION_SPCT_MSR_RPRT)
@@ -4059,7 +4059,7 @@ static int __skw_cfg80211_mgmt_tx(struct wiphy *wiphy, struct skw_iface *iface,
 	if (!skw_cmd_data_len_in_limit(skw, frame_len + sizeof(struct skw_mgmt_tx_param))) {
 		if (is_skw_rrm_report(frame, frame_len)) {
 			int head_offset = offsetof(struct ieee80211_mgmt,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 					u.action.measurement.element_id);
 #else
 					u.action.u.measurement.element_id);
@@ -5775,7 +5775,7 @@ static int skw_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 
 #endif /* Linux */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 static int skw_cfg80211_get_key_v73(struct wiphy *wiphy,
 		struct wireless_dev *wdev, int link_id, u8 key_idx, bool pairwise,
 		const u8 *addr, void *cookie,
@@ -5855,6 +5855,12 @@ static int skw_cfg80211_get_station_v73(struct wiphy *wiphy,
 	return skw_cfg80211_get_station(wiphy, wdev->netdev, mac, sinfo);
 }
 
+#define SKW_CFG80211_OP(fn) fn##_v73
+#else
+#define SKW_CFG80211_OP(fn) fn
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static int skw_set_wiphy_params_v73(struct wiphy *wiphy, int radio_idx,
 		u32 changed)
 {
@@ -5862,32 +5868,55 @@ static int skw_set_wiphy_params_v73(struct wiphy *wiphy, int radio_idx,
 		return -EINVAL;
 	return skw_set_wiphy_params(wiphy, changed);
 }
+#define SKW_SET_WIPHY_PARAMS skw_set_wiphy_params_v73
+#else
+#define SKW_SET_WIPHY_PARAMS skw_set_wiphy_params
+#endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 static int skw_remain_on_channel_v73(struct wiphy *wiphy,
 		struct wireless_dev *wdev, struct ieee80211_channel *chan,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		unsigned int duration, u64 cookie, const u8 *addr)
+#else
+		unsigned int duration, u64 *cookie, const u8 *addr)
+#endif
 {
 	if (addr && !ether_addr_equal(addr, wdev_address(wdev)))
 		return -EOPNOTSUPP;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	return skw_remain_on_channel(wiphy, wdev, chan, duration, &cookie);
+#else
+	return skw_remain_on_channel(wiphy, wdev, chan, duration, cookie);
+#endif
 }
+#define SKW_REMAIN_ON_CHANNEL skw_remain_on_channel_v73
+#else
+#define SKW_REMAIN_ON_CHANNEL skw_remain_on_channel
+#endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 static int skw_cfg80211_mgmt_tx_v73(struct wiphy *wiphy,
 		struct wireless_dev *wdev, struct cfg80211_mgmt_tx_params *params,
 		u64 cookie)
 {
 	return skw_cfg80211_mgmt_tx(wiphy, wdev, params, &cookie);
 }
+#define SKW_MGMT_TX skw_cfg80211_mgmt_tx_v73
+#else
+#define SKW_MGMT_TX skw_cfg80211_mgmt_tx
+#endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 static int skw_set_monitor_channel_v73(struct wiphy *wiphy,
 		struct net_device *dev, struct cfg80211_chan_def *chandef)
 {
 	return skw_set_monitor_channel(wiphy, chandef);
 }
 
-#define SKW_CFG80211_OP(fn) fn##_v73
+#define SKW_SET_MONITOR_CHANNEL skw_set_monitor_channel_v73
 #else
-#define SKW_CFG80211_OP(fn) fn
+#define SKW_SET_MONITOR_CHANNEL skw_set_monitor_channel
 #endif
 
 static struct cfg80211_ops skw_cfg80211_ops  = {
@@ -5918,10 +5947,10 @@ static struct cfg80211_ops skw_cfg80211_ops  = {
 	.disconnect = skw_cfg80211_disconnect,
 	.join_ibss = skw_join_ibss,
 	.leave_ibss = skw_leave_ibss,
-	.set_wiphy_params = SKW_CFG80211_OP(skw_set_wiphy_params),
-	.remain_on_channel = SKW_CFG80211_OP(skw_remain_on_channel),
+	.set_wiphy_params = SKW_SET_WIPHY_PARAMS,
+	.remain_on_channel = SKW_REMAIN_ON_CHANNEL,
 	.cancel_remain_on_channel = skw_cancel_roc,
-	.mgmt_tx = SKW_CFG80211_OP(skw_cfg80211_mgmt_tx),
+	.mgmt_tx = SKW_MGMT_TX,
 	.sched_scan_start = skw_cfg80211_sched_scan_start,
 	.sched_scan_stop = skw_cfg80211_sched_scan_stop,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
@@ -5958,7 +5987,7 @@ static struct cfg80211_ops skw_cfg80211_ops  = {
 	.probe_client = skw_probe_client,
 #endif
 	.dump_survey = skw_dump_survey,
-	.set_monitor_channel = SKW_CFG80211_OP(skw_set_monitor_channel),
+	.set_monitor_channel = SKW_SET_MONITOR_CHANNEL,
 	.change_bss = skw_change_bss,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
 	.external_auth = skw_external_auth,

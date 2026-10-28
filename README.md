@@ -8,11 +8,12 @@ the supplied DKMS package disables USB.
 
 ## Requirements and validation
 
-Requires **Linux 4.3 or newer**. The following kernel families have been tested:
+Requires **Linux 4.3 or newer**. Build and hardware validation results:
 
 | Version | Compiles | Tested |
 | --- | --- | --- |
 | 6.1 (Rockchip BSP) | Yes | Yes |
+| 7.2.8 | Yes | No |
 | 7.3 | Yes | Yes |
 
 These results cover the listed kernel families, not every patch release or

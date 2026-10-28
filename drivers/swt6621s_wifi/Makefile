@@ -40,7 +40,7 @@ ifneq ($(CONFIG_SWT6621S_EXTERNAL_REGDB),y)
 ccflags-y += -DCONFIG_SWT6621S_REGD_SELF_MANAGED
 endif
 
-ifeq ($(CONFIG_ARCH_ROCKCHIP),y)
+ifneq ($(filter y m,$(CONFIG_RFKILL_RK)),)
 ccflags-y += -DCONFIG_PLATFORM_ROCKCHIP
 endif
 
@@ -62,7 +62,7 @@ CFLAGS_trace.o := -I$(src)
 $(obj)/skw_core.o : $(obj)/version.h
 
 skw_abs_path := $(addprefix $(abspath $(srctree))/,$(filter-out /%,$(src)))$(filter /%,$(src))
-ifeq ($(shell test $(VERSION) -gt 7 -o \( $(VERSION) -eq 7 -a $(PATCHLEVEL) -ge 3 \) && echo y),y)
+ifneq ($(KBUILD_EXTMOD),)
 skw_abs_path := $(abspath $(src))
 endif
 $(obj)/version.h: $(skw_abs_path)/genver.pl

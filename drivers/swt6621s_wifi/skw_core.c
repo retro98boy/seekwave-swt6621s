@@ -1515,7 +1515,7 @@ static void skw_buffer_deinit(struct skw_core *skw)
 
 static struct wakeup_source *skw_wakeup_source_init(const char *name)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 	return wakeup_source_register(NULL, name);
 #else
 	struct wakeup_source *ws;
@@ -1530,7 +1530,7 @@ static struct wakeup_source *skw_wakeup_source_init(const char *name)
 
 static void skw_wakeup_source_deinit(struct wakeup_source *ws)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 	wakeup_source_unregister(ws);
 #else
 	if (ws) {
@@ -1744,7 +1744,7 @@ static int skw_core_init(struct skw_core *skw, struct platform_device *pdev, int
 	atomic_set(&skw->txqlen_pending, 0);
 
 	spin_lock_init(&skw->dfs.skw_pool_lock);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	hrtimer_setup(&skw->timer, skw_tx_timer_callback, CLOCK_MONOTONIC,
 		      HRTIMER_MODE_REL);
 #else
@@ -2513,7 +2513,7 @@ static void skw_driver_remove(struct platform_device *pdev)
 	atomic_dec(&skw_chip_idx);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
 static void skw_drv_remove_new(struct platform_device *pdev)
 {
 	skw_driver_remove(pdev);
@@ -2529,10 +2529,8 @@ static int skw_drv_remove(struct platform_device *pdev)
 
 static struct platform_driver skw_drv = {
 	.probe = skw_drv_probe,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
 	.remove = skw_drv_remove_new,
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	.remove_new = skw_drv_remove_new,
 #else
 	.remove = skw_drv_remove,
 #endif

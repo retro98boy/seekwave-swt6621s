@@ -69,7 +69,7 @@ void skw_boot_abort(void);
 #define PLATFORM_DEVID_AUTO -1
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 #else
 #ifdef CONFIG_NO_GKI
@@ -82,7 +82,7 @@ MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif
 #endif
 
-#endif /* Linux 7.3 */
+#endif /* Linux 6.13 */
 
 /****************************************************************
  *Description:the skwsdio log define and the skwsdio data debug,

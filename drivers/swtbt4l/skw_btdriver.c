@@ -1128,8 +1128,8 @@ static int btseekwave_remove(struct platform_device *pdev)
     return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
-static void btseekwave_remove_v73(struct platform_device *pdev)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void btseekwave_remove_void(struct platform_device *pdev)
 {
     btseekwave_remove(pdev);
 }
@@ -1143,8 +1143,8 @@ static struct platform_driver  btseekwave_driver =
         .pm     = NULL,
     },
     .probe      = btseekwave_probe,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
-    .remove     = btseekwave_remove_v73,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+    .remove     = btseekwave_remove_void,
 #else
     .remove     = btseekwave_remove,
 #endif

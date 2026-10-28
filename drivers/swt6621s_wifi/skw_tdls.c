@@ -923,7 +923,7 @@ skw_tdls_build_send_direct(struct net_device *dev,
 
 	switch (action_code) {
 	case WLAN_PUB_ACTION_TDLS_DISCOVER_RES:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 		skb_put(skb, 2 + sizeof(mgmt->u.action.tdls_discover_resp));
 		mgmt->u.action.category = WLAN_CATEGORY_PUBLIC;
 		mgmt->u.action.action_code = WLAN_PUB_ACTION_TDLS_DISCOVER_RES;
