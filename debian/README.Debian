@@ -1,0 +1,38 @@
+SWT6621S DKMS package
+====================
+
+Install the matching headers for your kernel before installing this package.
+On Armbian edge rockchip64, these are linux-headers-edge-rockchip64.
+The package builds the SDIO transport, Wi-Fi and Bluetooth modules; it does
+not package firmware, a device tree or prebuilt kernel modules.
+
+Module loading, module parameters and board firmware paths are managed by
+the distribution or administrator. This package installs no modules-load.d
+or modprobe.d configuration. For firmware installed under
+/lib/firmware/seekwave, the distribution should set firmware_dir=seekwave.
+
+Packaging targets Debian 11+ and Ubuntu 20.04+. Kernel API compatibility is
+separate: matching kernel headers and a supported driver/kernel combination
+are required. The architecture-independent package contains source only.
+
+Build on Debian/Ubuntu (older releases provide dh_dkms in dkms):
+
+  sudo apt-get install debhelper dkms build-essential
+  # On releases with a separate dh-dkms package, install it as well.
+  dpkg-buildpackage -us -uc -b
+
+Install:
+
+  sudo apt install ./swt6621s-dkms_2026.10.27+git15a66f7_all.deb
+  dkms status
+
+Kernel image and header package hooks invoke DKMS automatically. Reinstalling
+the same kernel normally reuses an existing DKMS build; a fresh kernel
+version requires a new build. Do not remove a running kernel to test this.
+
+The package does not forcibly unload a running driver during installation.
+Reboot or reload the three modules to use the newly built modules.
+
+Package versions identify the source snapshot date and Git revision rather
+than inventing an upstream release number. Debian packaging-only revisions
+can use a trailing .1, .2, etc. in this native package version.

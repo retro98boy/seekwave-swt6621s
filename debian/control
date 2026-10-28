@@ -1,0 +1,18 @@
+Source: swt6621s
+Section: kernel
+Priority: optional
+Maintainer: retro98boy <retro98boy@qq.com>
+Build-Depends: debhelper-compat (= 12), dh-dkms | dkms
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: swt6621s-dkms
+Architecture: all
+Depends: ${misc:Depends}, make, gcc, perl
+Description: SWT6621S SDIO Wi-Fi and Bluetooth driver (DKMS)
+ Source for the skw_sdio_lite, swt6621s_wifi and skwbt kernel modules.
+ DKMS builds the modules for installed kernels with matching headers and
+ rebuilds them when a new kernel is installed.
+ .
+ Matching kernel headers and board-specific firmware are required.
+ Firmware is not included in this package.

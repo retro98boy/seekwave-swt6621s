@@ -1,0 +1,7 @@
+swt6621s (2026.10.27+git15a66f7) unstable; urgency=medium
+
+  * Package the SDIO Wi-Fi and Bluetooth drivers using dh-dkms.
+  * Use swt6621s as the DKMS module name.
+  * Include Linux 7.3 compatibility while retaining older kernel paths.
+
+ -- retro98boy <retro98boy@qq.com>  Tue, 27 Oct 2026 22:34:03 +0800
