@@ -767,7 +767,7 @@ static void skw_pci_edma_rx_data(struct skw_edma_chn *edma_chn, void *data, int 
 
 			skw_warn("total len: %d\n", total_len);
 			skw_warn("rxc node address:%llx skb->data:%llx\n", virt_to_phys(data), virt_to_phys(skb->data));
-			skw_hex_dump("invalid rx skb:", skb->data, skb->len, true);
+			skw_hex_dump("invalid rx skb:", skb->data, skb->len, false);
 
 			//skw_compat_page_frag_free((void *)p_data);
 			//kfree_skb(skb);

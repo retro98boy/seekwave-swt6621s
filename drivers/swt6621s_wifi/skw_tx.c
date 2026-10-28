@@ -1130,7 +1130,7 @@ void skw_dump_vring(struct vring *vr)
 
 		skw_dbg("    Desc[%03u]: addr=0x%016llx, len=%u, flags=0x%04x, next=%u\n",
 				i, (unsigned long long)desc->addr, desc->len, desc->flags, desc->next);
-		skw_hex_dump("desc addr", phys_to_virt(desc->addr), desc->len, true);
+		skw_hex_dump("desc addr", phys_to_virt(desc->addr), desc->len, false);
 	}
 
 	skw_dbg("  Available Ring (avail->idx=%u):\n", avail_idx);

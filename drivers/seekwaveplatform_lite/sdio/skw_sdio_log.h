@@ -33,29 +33,35 @@ unsigned long skw_sdio_log_level(void);
 #define skw_sdio_log(level, fmt, ...) \
 	do { \
 		if (skw_sdio_log_level() & level) \
-			pr_err(fmt,  ##__VA_ARGS__); \
+			pr_info(fmt,  ##__VA_ARGS__); \
 	} while (0)
 
 #define skw_sdio_port_log(port_num, fmt, ...) \
 	do { \
 		if (skw_sdio_log_level() &(SKW_SDIO_PORT0<<port_num)) \
-			pr_err(fmt,  ##__VA_ARGS__); \
+			pr_info(fmt,  ##__VA_ARGS__); \
 	} while (0)
 
 #define skw_port_log(port_num,fmt, ...) \
 	skw_sdio_log((SKW_SDIO_PORT0<<port_num), "[PORT_LOG] %s: "fmt, __func__, ##__VA_ARGS__)
 
+#define skw_sdio_log_at(pr_fn, level, fmt, ...) \
+	do { \
+		if (skw_sdio_log_level() & level) \
+			pr_fn(fmt,  ##__VA_ARGS__); \
+	} while (0)
+
 #define skw_sdio_err(fmt, ...) \
-	skw_sdio_log(SKW_SDIO_ERROR, "[SKWSDIO ERROR] %s: "fmt, __func__, ##__VA_ARGS__)
+	skw_sdio_log_at(pr_err, SKW_SDIO_ERROR, "[SKWSDIO ERROR] %s: "fmt, __func__, ##__VA_ARGS__)
 
 #define skw_sdio_warn(fmt, ...) \
-	skw_sdio_log(SKW_SDIO_WARNING, "[SKWSDIO WARN] %s: "fmt, __func__, ##__VA_ARGS__)
+	skw_sdio_log_at(pr_warn, SKW_SDIO_WARNING, "[SKWSDIO WARN] %s: "fmt, __func__, ##__VA_ARGS__)
 
 #define skw_sdio_info(fmt, ...) \
-	skw_sdio_log(SKW_SDIO_INFO, "[SKWSDIO INFO] %s: "fmt, __func__, ##__VA_ARGS__)
+	skw_sdio_log_at(pr_info, SKW_SDIO_INFO, "[SKWSDIO INFO] %s: "fmt, __func__, ##__VA_ARGS__)
 
 #define skw_sdio_dbg(fmt, ...) \
-	skw_sdio_log(SKW_SDIO_DEBUG, "[SKWSDIO DBG] %s: "fmt, __func__, ##__VA_ARGS__)
+	skw_sdio_log_at(pr_debug, SKW_SDIO_DEBUG, "[SKWSDIO DBG] %s: "fmt, __func__, ##__VA_ARGS__)
 
 #define skw_sdio_hex_dump(prefix, buf, len) \
 	do { \

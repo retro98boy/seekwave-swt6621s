@@ -65,42 +65,48 @@ unsigned long skw_log_level(void);
 #define skw_log(level, fmt, ...) \
 	do { \
 		if (skw_log_level() & level) \
-			pr_err(fmt,  ##__VA_ARGS__); \
+			pr_info(fmt,  ##__VA_ARGS__); \
+	} while (0)
+
+#define skw_log_at(pr_fn, level, fmt, ...) \
+	do { \
+		if (skw_log_level() & level) \
+			pr_fn(fmt,  ##__VA_ARGS__); \
 	} while (0)
 
 #define skw_err(fmt, ...) \
-	skw_log(SKW_ERROR, "[%s] %s: "fmt, SKW_TAG_ERROR, __func__, ##__VA_ARGS__)
+	skw_log_at(pr_err, SKW_ERROR, "[%s] %s: "fmt, SKW_TAG_ERROR, __func__, ##__VA_ARGS__)
 
 #define skw_warn(fmt, ...) \
-	skw_log(SKW_WARN, "[%s] %s: "fmt, SKW_TAG_WARN, __func__, ##__VA_ARGS__)
+	skw_log_at(pr_warn, SKW_WARN, "[%s] %s: "fmt, SKW_TAG_WARN, __func__, ##__VA_ARGS__)
 
 #define skw_info(fmt, ...) \
-	skw_log(SKW_INFO, "[%s] %s: "fmt, SKW_TAG_INFO, __func__, ##__VA_ARGS__)
+	skw_log_at(pr_info, SKW_INFO, "[%s] %s: "fmt, SKW_TAG_INFO, __func__, ##__VA_ARGS__)
 
 #define skw_dbg(fmt, ...) \
-	skw_log(SKW_DEBUG, "[%s] %s: "fmt, SKW_TAG_DEBUG, __func__, ##__VA_ARGS__)
+	skw_log_at(pr_debug, SKW_DEBUG, "[%s] %s: "fmt, SKW_TAG_DEBUG, __func__, ##__VA_ARGS__)
 
 #define skw_detail(fmt, ...) \
-	skw_log(SKW_DETAIL, "[%s] %s: "fmt, SKW_TAG_DETAIL, __func__, ##__VA_ARGS__)
+	skw_log_at(pr_debug, SKW_DETAIL, "[%s] %s: "fmt, SKW_TAG_DETAIL, __func__, ##__VA_ARGS__)
 
 #define skw_dev_err(dev, fmt, ...) \
-	skw_log(SKW_ERROR, "[%s] %s@%s: "fmt, SKW_TAG_ERROR, netdev_name(dev), \
+	skw_log_at(pr_err, SKW_ERROR, "[%s] %s@%s: "fmt, SKW_TAG_ERROR, netdev_name(dev), \
 		__func__, ##__VA_ARGS__)
 
 #define skw_dev_warn(dev, fmt, ...) \
-	skw_log(SKW_WARN, "[%s] %s.%s: "fmt, SKW_TAG_WARN, netdev_name(dev), \
+	skw_log_at(pr_warn, SKW_WARN, "[%s] %s.%s: "fmt, SKW_TAG_WARN, netdev_name(dev), \
 		__func__, ##__VA_ARGS__)
 
 #define skw_dev_info(dev, fmt, ...) \
-	skw_log(SKW_INFO, "[%s] %s.%s: "fmt, SKW_TAG_INFO, netdev_name(dev), \
+	skw_log_at(pr_info, SKW_INFO, "[%s] %s.%s: "fmt, SKW_TAG_INFO, netdev_name(dev), \
 		__func__, ##__VA_ARGS__)
 
 #define skw_dev_dbg(dev, fmt, ...) \
-	skw_log(SKW_DEBUG, "[%s] %s.%s: "fmt, SKW_TAG_DEBUG, netdev_name(dev), \
+	skw_log_at(pr_debug, SKW_DEBUG, "[%s] %s.%s: "fmt, SKW_TAG_DEBUG, netdev_name(dev), \
 		__func__, ##__VA_ARGS__)
 
 #define skw_dev_detail(dev, fmt, ...) \
-	skw_log(SKW_DETAIL, "[%s] %s.%s: "fmt, SKW_TAG_DETAIL, netdev_name(dev), \
+	skw_log_at(pr_debug, SKW_DETAIL, "[%s] %s.%s: "fmt, SKW_TAG_DETAIL, netdev_name(dev), \
 		__func__, ##__VA_ARGS__)
 
 #define skw_hex_dump(prefix, buf, len, force)                                    \
