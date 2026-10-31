@@ -4883,7 +4883,9 @@ static int skw_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
 			initiator, buf, len);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 189) && \
+	 LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
 static int skw_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
 			     const u8 *peer, int link_id,
 			     u8 action_code, u8 dialog_token, u16 status_code,
