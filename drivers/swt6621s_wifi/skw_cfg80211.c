@@ -5764,15 +5764,27 @@ static int skw_cfg80211_disassoc(struct wiphy *wiphy, struct net_device *dev,
 			struct cfg80211_disassoc_request *req)
 {
 	bool tx = !req->local_state_change;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+	const u8 *bssid = req->ap_addr;
+#else
 	const u8 *bssid = (const u8 *)req->bss->bssid;
+#endif
 
 	return skw_disassoc(wiphy, dev, bssid, req->reason_code, tx);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2)
+static int skw_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+		unsigned int link_id)
+{
+	return skw_stop_ap(wiphy, dev, link_id);
+}
+#else
 static int skw_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 {
 	return skw_stop_ap(wiphy, dev, 0);
 }
+#endif
 #endif
 
 #endif /* Linux */
