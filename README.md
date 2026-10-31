@@ -8,16 +8,8 @@ the supplied DKMS package disables USB.
 
 ## Requirements and validation
 
-Requires **Linux 4.3 or newer**. Build and hardware validation results:
-
-| Version | Compiles | Tested |
-| --- | --- | --- |
-| 6.1 (Rockchip BSP) | Yes | Yes |
-| 7.2.8 | Yes | No |
-| 7.3 | Yes | Yes |
-
-These results cover the listed kernel families, not every patch release or
-feature. Other boards and firmware combinations require separate validation.
+Requires **Linux 4.3 or newer**. For kernel build compatibility, see the
+[CI matrix](ci/kernels.json). CI does not test hardware or firmware functionality.
 
 Packaging targets Debian 11+ and Ubuntu 20.04+. The board needs a working SDIO
 host, power sequencing and device tree, matching kernel headers, a compiler,

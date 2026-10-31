@@ -1,1 +1,6 @@
 /dist/
+/ci-cache/
+/ci-sources/
+/ci-results/
+/ci-report/
+__pycache__/
