@@ -1839,7 +1839,7 @@ static int skw_change_beacon(struct wiphy *wiphy, struct net_device *dev,
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
 static int skw_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
                        struct cfg80211_ap_update *info)
 {

@@ -621,7 +621,7 @@ static inline void skw_peer_ctx_unlock(struct skw_peer_ctx *ctx)
 	mutex_unlock(&ctx->lock);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
 static inline void skw_wdev_lock(struct wireless_dev *wdev)
 	__acquires(&wdev->wiphy->mtx)
 {
