@@ -387,7 +387,7 @@ static inline bool skw_compat_cfg80211_rx_mgmt(struct wireless_dev *wdev,
 
 static inline void *skw_pde_data(const struct inode *inode)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 	return pde_data(inode);
 #else
 	return PDE_DATA(inode);
