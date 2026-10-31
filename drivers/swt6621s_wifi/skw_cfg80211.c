@@ -5907,7 +5907,8 @@ static int skw_cfg80211_mgmt_tx_v73(struct wiphy *wiphy,
 #define SKW_MGMT_TX skw_cfg80211_mgmt_tx
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+/* The net_device argument was also backported to Linux 6.12.101. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 101)
 static int skw_set_monitor_channel_v73(struct wiphy *wiphy,
 		struct net_device *dev, struct cfg80211_chan_def *chandef)
 {
